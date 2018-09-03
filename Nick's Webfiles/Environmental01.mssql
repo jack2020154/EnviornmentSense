@@ -1,0 +1,67 @@
+-- phpMyAdmin SQL Dump
+-- version 4.8.2
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: Sep 03, 2018 at 10:13 PM
+-- Server version: 5.7.16
+-- PHP Version: 5.6.30
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET AUTOCOMMIT = 0;
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `Environmental01`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `Test01`
+--
+
+CREATE TABLE `Test01` (
+  `Location` varchar(30) CHARACTER SET armscii8 NOT NULL,
+  `Time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `Temperature` float NOT NULL,
+  `Humidity` float NOT NULL,
+  `CO2` int(6) NOT NULL,
+  `PM25` float NOT NULL,
+  `PM10` int(6) NOT NULL,
+  `PM100` int(6) NOT NULL,
+  `Lux` int(6) NOT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Dumping data for table `Test01`
+--
+
+INSERT INTO `Test01` (`Location`, `Time`, `Temperature`, `Humidity`, `CO2`, `PM25`, `PM10`, `PM100`, `Lux`) VALUES
+('SMS', '2018-08-10 02:41:45', 55.5, 555, 1000, 33.33, 5, 5, 21),
+('H529', '2018-08-10 02:41:51', 22, 55, 33, 55, 66, 77, 33),
+('H200', '2018-08-10 02:43:09', 22, 55, 33, 55, 66, 77, 33),
+('H300', '2018-08-10 02:43:15', 22, 55, 33, 55, 66, 77, 355),
+('SMS', '2018-08-10 11:25:15', 33333, 333, 333, 333, 333, 33, 333);
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `Test01`
+--
+ALTER TABLE `Test01`
+  ADD PRIMARY KEY (`Time`);
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
