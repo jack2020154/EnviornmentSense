@@ -30,7 +30,7 @@ else {
 
 
 @$fields_num = mysqli_num_fields($result);
-echo ("<a href=index.html.en> Return home </a>");
+echo ("<a href=index.html> Return home </a>");
 echo "<link rel='stylesheet' type='text/css'  href='style.css'>";
 echo "<h1>SQL Server IP: {$db_host}</h1>";
 echo "<h1>Database: {$database}</h1>";
