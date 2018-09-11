@@ -8,6 +8,7 @@
 //Setting the address of the VOC Sensor
 int voc_intcode[] = {0xB8, 0x00, 0xB8};
 int voc_address = 0xB8;
+int *a, *b, *c, *d, *e;
 //I'm not really sure if that is the real correct address. 
 
 
@@ -21,33 +22,35 @@ void setup() {
 
 }
 
-void i2cSend(int sentData) {
+void i2cSend(int voc_address, int sentData) {
+  int confirmByte;
   Wire.beginTransmission(voc_address);
   Wire.write(sentData);
   Wire.endTransmission();
-  while(Wire.available() == 0) {
-    int confirmByte = Wire.read();
-  }
-  if (confirmByte == 1) {
-    Serial.println("Write " sentData " acknowledged");
-  } else {
-    Serial.println("Write " sentData " not acknowledged");
-  }
 }
 
-void i2cReceive(int receiveAddr, int reveiceBytes) {
-  int receivedArray[] = Wire.requestFrom(receiveAddr, receiveBytes);
+void i2cReceive(int receiveAddr, int receiveBytes) {
+  Wire.requestFrom(receiveAddr, receiveBytes);
+ *a = Wire.read();
+ *b = Wire.read();
+ *c = Wire.read();
+ *d = Wire.read();
+ *e = Wire.read();
 }
 
-void printValues(int arrayData) {
-  for(int i, receivedArray[i] != 0, i++) {
-    Serial.println(receivedArray[i]);
-  }
+void printValues() {
+  Serial.println("Incoming Data: ");
+  Serial.println(*a);
+  Serial.println(*b);
+  Serial.println(*c);
+  Serial.println(*d);
+  Serial.println(*e);
 }
 
 void loop() {
-  i2cSend(0xB8);
-  i2cSend(0x00);
+  Serial.println("Begin Data Transfer");
+  i2cSend(0xB8, 0);
   i2cReceive(0xB9, 5);
-  printValues(receivedArray);
+  printValues();
+  delay(2000);
 }
