@@ -6,7 +6,9 @@
 
 
 //Setting the address of the VOC Sensor
-int voc_address = 0xB8
+int voc_intcode[] = {0xB8, 0x00, 0xB8};
+int voc_address = 0xB8;
+int *a, *b, *c, *d, *e;
 //I'm not really sure if that is the real correct address. 
 
 
@@ -14,35 +16,41 @@ void setup() {
   // put your setup code here, to run once:
   
   Serial.begin(9600);
-  Wire.begin;
+  Wire.begin();
 
   
 
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-
-
-  //Probably put all of this into one function, but this should be the gist of i2c for a single sensor.
-  //As long as you have the address of the sensor and use it then it should be fine. 
-
-
-  //Start talking
+void i2cSend(int voc_address, int sentData) {
+  int confirmByte;
   Wire.beginTransmission(voc_address);
-  //Asking for register zero
-  Wire.write(0);
-  //Complete the Transmission
+  Wire.write(sentData);
   Wire.endTransmission();
-  //Request 1 byte
-  Wire.requestFrom(voc_address, 1);
-  //just waits for the response, might change this later
-  while(Wire.available() == 0);
-  //get the information and stores it into the variable
-  int v = Wire.read(); 
-  //print for the sake of printing
-  Serial.print(v);
-  
-  
+}
 
+void i2cReceive(int receiveAddr, int receiveBytes) {
+  Wire.requestFrom(receiveAddr, receiveBytes);
+ *a = Wire.read();
+ *b = Wire.read();
+ *c = Wire.read();
+ *d = Wire.read();
+ *e = Wire.read();
+}
+
+void printValues() {
+  Serial.println("Incoming Data: ");
+  Serial.println(*a);
+  Serial.println(*b);
+  Serial.println(*c);
+  Serial.println(*d);
+  Serial.println(*e);
+}
+
+void loop() {
+  Serial.println("Begin Data Transfer");
+  i2cSend(0xB8, 0);
+  i2cReceive(0xB9, 5);
+  printValues();
+  delay(2000);
 }
