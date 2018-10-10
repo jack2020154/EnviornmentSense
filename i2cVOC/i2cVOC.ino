@@ -3,27 +3,15 @@
 
 
 #include <Wire.h>
-
-
-//Setting the address of the VOC Sensor
-int voc_intcode[] = {0xB8, 0x00, 0xB8};
 int voc_address = 0xB8;
-int *a, *b, *c, *d, *e;
-//I'm not really sure if that is the real correct address. 
-
+int highByteVOC, lowByteVOC, rsvdHighByte, rsvdLowByte, checksumByte;
 
 void setup() {
-  // put your setup code here, to run once:
-  
   Serial.begin(9600);
   Wire.begin();
-
-  
-
 }
 
 void i2cSend(int voc_address, int sentData) {
-  int confirmByte;
   Wire.beginTransmission(voc_address);
   Wire.write(sentData);
   Wire.endTransmission();
@@ -31,26 +19,35 @@ void i2cSend(int voc_address, int sentData) {
 
 void i2cReceive(int receiveAddr, int receiveBytes) {
   Wire.requestFrom(receiveAddr, receiveBytes);
- *a = Wire.read();
- *b = Wire.read();
- *c = Wire.read();
- *d = Wire.read();
- *e = Wire.read();
-}
+   while(Wire.available() == 0) {
+    Serial.println("Waiting for bytes");
+    highByteVOC = Wire.read();
+    lowByteVOC = Wire.read();
+    rsvdHighByte = Wire.read();
+    rsvdLowByte = Wire.read(); 
+    checksumByte = Wire.read();
+  }
+ }
 
 void printValues() {
   Serial.println("Incoming Data: ");
-  Serial.println(*a);
-  Serial.println(*b);
-  Serial.println(*c);
-  Serial.println(*d);
-  Serial.println(*e);
+  Serial.print("High VOC Byte: ");
+  Serial.println(highByteVOC);
+  Serial.print("Low VOC Byte: ");
+  Serial.println(lowByteVOC);
+  Serial.print("High Reserved Byte: ");
+  Serial.println(rsvdHighByte);
+  Serial.print("Low Reserved Byte: ");
+  Serial.println(rsvdLowByte);
+  Serial.print("Checksum Byte: ");
+  Serial.println(checksumByte);
+  
 }
 
 void loop() {
   Serial.println("Begin Data Transfer");
-  i2cSend(0xB8, 0);
-  i2cReceive(0xB9, 5);
+  i2cSend(0x5C, 0);
+  i2cReceive(0x5D, 5);
   printValues();
   delay(2000);
 }

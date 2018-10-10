@@ -10,11 +10,11 @@
 //
 //*The Data pin on the DHT22 sensor connects to pin D4 (GPIO 2)
 //
-//*The SDA pin on the OLED Display connects to D2 (GPIO4)
-//*The SCL pin on the OLED Display connects to D1 (GPIO5)
+//*The SDA pin on the OLED Display connects to D1 (GPIO5)
+//*The SCL pin on the OLED Display connects to D2 (GPIO4)
 //
-//*The SDA pin on the Light Sensor connects to D2 (GPIO4)
-//*The SCL pin on the Light Sensor connects to D1 (GPIO5)
+//*The SDA pin on the Light Sensor connects to D1 (GPIO5)
+//*The SCL pin on the Light Sensor connects to D2 (GPIO4)
 //
 //*Version：V0.8
 //*Author：Joel Klammer
@@ -27,7 +27,8 @@
 // v0.7 Added support for Light Sensor, switched SDA & SCL for Wire library
 // v0.6 Added asynchronous webpage support, graphic welcome screen
 // v0.5
-
+#include <Adafruit_Sensor.h>
+#include "Adafruit_TSL2591.h"
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -36,8 +37,6 @@
 #include <ESPAsyncWebServer.h>
 #include <DHT.h>
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include "Adafruit_TSL2591.h"
 #include <DNSServer.h>
 #include "concordia2.h"
 extern "C" {
@@ -48,8 +47,8 @@ extern "C" {
 
 // Initialize the OLED display using Wire library
 //#define offset 0x00
-#include "SH1106.h" // alias for `#include "SH1106Wire.h"
-SH1106 display(0x3c, 5, 4);
+#include "SH1106Wire.h" // alias for `#include "SH1106Wire.h"
+SH1106Wire display(0x3c, 5, 4);
 //#include "SSD1306.h" // alias for `#include "SSD1306Wire.h"
 //SSD1306  display(0x3c, 4, 5);
 
@@ -112,15 +111,21 @@ AsyncWebServer server(80);
 AsyncWebServer JSONserver(8080);
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("loading ESP.wdtdisable");
   ESP.wdtDisable();
+  Serial.println("loading esp.wdt.Enable");
   ESP.wdtEnable(WDTO_8S);
+  Serial.println("loading dht.begin");
   dht.begin();
+  Serial.println("loading light sensor and configuring");
   light_sensor_found = light_sensor.begin();
   if (light_sensor_found)
   {
     light_sensor.setGain(TSL2591_GAIN_MED);      // 25x gain
     light_sensor.setTiming(TSL2591_INTEGRATIONTIME_300MS);
   }
+  Serial.println("loading display code");
   display.init();
   display.flipScreenVertically();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -130,8 +135,7 @@ void setup() {
   display.drawString(64, 40, location);
   display.display();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-
-  Serial.begin(115200);
+  Serial.println("loading pm and co2 serial");
   pmSerial.begin(9600);
   co2Serial.begin(9600);
   pinMode(LED, OUTPUT);
@@ -139,6 +143,7 @@ void setup() {
   // Connect to WiFi network
   //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
   //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
+  Serial.println("loading wifi");
   WiFi.mode(WIFI_OFF);
   delay(1000);
   WiFi.mode(WIFI_STA);
@@ -564,3 +569,5 @@ void loop() {
   displayInfo();
   digitalWrite(LED, HIGH);
 }
+
+
