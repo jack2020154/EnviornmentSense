@@ -49,7 +49,7 @@ extern "C" {
 // Initialize the OLED display using Wire library
 //#define offset 0x00
 #include "SH1106.h" // alias for `#include "SH1106Wire.h"
-SH1106 display(0x3c, 5, 4);
+SH1106 display(0x3c, 4, 5);
 //#include "SSD1306.h" // alias for `#include "SSD1306Wire.h"
 //SSD1306  display(0x3c, 4, 5);
 
@@ -69,9 +69,9 @@ Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for 
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
-const char* location = "H529";
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
+const char* location = "TEST01";
+const char* ssid = "TP-LINK 2.4";
+const char* password = "7809882089";
 static unsigned long uploadInterval = 1000 * 60 * 5;  //ms between uploads
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
@@ -509,7 +509,7 @@ void loop() {
   co2Serial.enableRx(false);
   digitalWrite(LED, LOW);
   pmSerial.flush();
-  //pmSerial.write(PMstartup, 7);
+  pmSerial.write(PMstartup, 7);
   delay(1000);
   wdt_reset();
   if (pmSerial.find(0x42))
