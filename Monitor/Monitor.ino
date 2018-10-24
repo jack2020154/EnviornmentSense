@@ -69,9 +69,10 @@ Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for 
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
+bool activeConnection= true;
 const char* location = "TEST01";
-const char* ssid = "TP-LINK 2.4";
-const char* password = "7809882089";
+const char* ssid = "asdf";
+const char* password = "";
 static unsigned long uploadInterval = 1000 * 60 * 5;  //ms between uploads
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
@@ -147,22 +148,44 @@ void setup() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
-
+  int i = 0;
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
     Serial.print(".");
+    i++;
+    if(i>20) {
+      activeConnection = false;
+      break;
+    }
   }
-  Serial.println();
-  Serial.println("WiFi connected");
+  if(activeConnection) {
+    Serial.println();
+    Serial.println("WiFi connected");
 
-  Serial.println();
-  Serial.print("MAC Address: ");
-  Serial.println( WiFi.macAddress() );
-  Serial.println("WiFi connected");
-  Serial.print("IP Address: ");
-  IP = ipToString( WiFi.localIP() );
-  Serial.println( IP );
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/html", webpage);
+  });
+  server.begin();
+
+  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/json", JSON);                  // or "text/plain"?
+  });
+  JSONserver.begin();
+  }
+  else if(!activeConnection) {
+    IP = "NO CONNECTION";
+    Serial.println();
+    Serial.println("Connection timed out after 10 seconds");
+    
+  }
 
   //Start server
   //WiFi.mode( WIFI_OFF );
@@ -176,15 +199,7 @@ void setup() {
   // if DNSServer is started with "*" for domain name, it will reply with provided IP to all DNS request
   //dnsServer.start(DNS_PORT, "*", apIP);
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/html", webpage);
-  });
-  server.begin();
-
-  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "application/json", JSON);                  // or "text/plain"?
-  });
-  JSONserver.begin();
+  
 }
 
 void makeWebpage()
@@ -353,9 +368,15 @@ void displayInfo() {
 
   display.clear();
   String s = location;
-  s += " (";
-  s += IP;
-  s += ")";
+  if(activeConnection) {
+    s += " (";
+    s += IP;
+    s += ")";
+  } else {
+    s += "(";
+    s += IP;
+    s += ")";
+  }
   display.setFont(ArialMT_Plain_10);
   display.drawString(0, 0, s);
   if (displayCount == 0 )
@@ -509,7 +530,7 @@ void loop() {
   co2Serial.enableRx(false);
   digitalWrite(LED, LOW);
   pmSerial.flush();
-  pmSerial.write(PMstartup, 7);
+  //pmSerial.write(PMstartup, 7);
   delay(1000);
   wdt_reset();
   if (pmSerial.find(0x42))
