@@ -70,9 +70,13 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 bool activeConnection= true;
+
 const char* location = "TEST01";
-const char* ssid = "asdf";
-const char* password = "";
+const char* ssid = "TP-LINK 2.4";
+const char* password = "7809882089";
+const char* ssidAlt = "CISS_Visitors";
+const char* passwordAlt = "";
+
 static unsigned long uploadInterval = 1000 * 60 * 5;  //ms between uploads
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
@@ -181,10 +185,50 @@ void setup() {
   JSONserver.begin();
   }
   else if(!activeConnection) {
-    IP = "NO CONNECTION";
+    WiFi.mode(WIFI_OFF);
+    (500);
     Serial.println();
-    Serial.println("Connection timed out after 10 seconds");
-    
+    Serial.print("Connection to ");
+    Serial.print(ssid);
+    Serial.println(" failed, timed out after 10 seconds.");
+    Serial.print("Attempting to connect to ");
+    Serial.print(ssidAlt);
+    WiFi.begin(ssidAlt, passwordAlt);
+    activeConnection = true;
+    while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+    i++;
+    if(i>20) {
+      activeConnection = false;
+      break;
+    }
+  }
+  if(activeConnection) {
+    Serial.println();
+    Serial.println("WiFi connected");
+
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/html", webpage);
+  });
+  server.begin();
+
+  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/json", JSON);                  // or "text/plain"?
+  });
+  JSONserver.begin();
+  } else if(!activeConnection) {
+    IP = "NO CONNECTION";
+    Serial.println("Connection to both networks failed.");
+  }
   }
 
   //Start server
