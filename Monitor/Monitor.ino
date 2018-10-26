@@ -72,8 +72,8 @@ SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 bool activeConnection= true;
 
 const char* location = "TEST01";
-const char* ssid = "TP-LINK 2.4";
-const char* password = "7809882089";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 const char* ssidAlt = "CISS_Visitors";
 const char* passwordAlt = "";
 
@@ -190,11 +190,12 @@ void setup() {
     Serial.println();
     Serial.print("Connection to ");
     Serial.print(ssid);
-    Serial.println(" failed, timed out after 10 seconds.");
+    Serial.println(" failed after 10 seconds.");
     Serial.print("Attempting to connect to ");
     Serial.print(ssidAlt);
     WiFi.begin(ssidAlt, passwordAlt);
     activeConnection = true;
+    i = 0;
     while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
