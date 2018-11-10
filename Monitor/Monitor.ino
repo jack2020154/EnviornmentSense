@@ -39,12 +39,14 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_TSL2591.h"
 #include <DNSServer.h>
+#include <EEPROM.h>
 #include "concordia2.h"
+#include "SparkFunCCS811.h"
 extern "C" {
 #include "user_interface.h"
 }
 #define CPU    80          // CPU clock in MHz (valid 80, 160)
-
+#define CCS811_ADDR 0x5A
 
 // Initialize the OLED display using Wire library
 //#define offset 0x00
@@ -64,20 +66,34 @@ SH1106 display(0x3c, 4, 5);
 DHT dht(DHTPIN, DHTTYPE);
 
 Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for the sensor identifier (for your use later)
-
+CCS811Core::status errorStatus;
 
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 bool activeConnection= true;
 
+bool vocConnected = true;
+bool baselineAvailable = false;
+bool baselineLoaded = false;
+byte eeprom1, eeprom2;
+unsigned int eeprom3, eeprom4;
+unsigned int result;
+
+int vocLevels = -1;
+int vocCO2 = -1;
+int vocTVOC = -1;
+String macAddr;
+
 const char* location = "TEST01";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
-const char* ssidAlt = "CISS_Visitors";
-const char* passwordAlt = "";
+const char* ssidAlt = "TP-LINK 2.4";
+const char* passwordAlt = "7809882089";
 
-static unsigned long uploadInterval = 1000 * 60 * 5;  //ms between uploads
+static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
+static unsigned long vocWarmup = 1000 * 60 * 20;
+static unsigned long vocBurnin = 1000 * 60 * 60 * 48; // Time for VOC burnin
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
@@ -115,6 +131,7 @@ static byte LED = 16;                 //D0 (GPIO 16)
 DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebServer JSONserver(8080);
+CCS811 vocSensor(CCS811_ADDR);
 
 void setup() {
   ESP.wdtDisable();
@@ -140,6 +157,20 @@ void setup() {
   pmSerial.begin(9600);
   co2Serial.begin(9600);
   pinMode(LED, OUTPUT);
+
+  EEPROM.begin(512);
+  CCS811Core::status returnCode = vocSensor.begin();
+  if ((EEPROM.get(0, eeprom1) == 0xA5) && (EEPROM.get(1, eeprom2) == 0xB2)) {
+    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom3) << 8 & 0xFFFF | EEPROM.get(3, eeprom4));
+    Serial.println("Baseline available");
+    Serial.println("Applied baseline: ");
+    Serial.println(baselineToApply, HEX);
+    baselineAvailable = true;
+    errorStatus = vocSensor.setBaseline( baselineToApply );
+    if (errorStatus == CCS811Core::SENSOR_SUCCESS)
+      baselineLoaded = true;
+  }
+
 
   // Connect to WiFi network
   //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
@@ -170,6 +201,7 @@ void setup() {
     Serial.println();
     Serial.print("MAC Address: ");
     Serial.println( WiFi.macAddress() );
+    macAddr = WiFi.macAddress();
     Serial.println("WiFi connected");
     Serial.print("IP Address: ");
     IP = ipToString( WiFi.localIP() );
@@ -213,6 +245,8 @@ void setup() {
     Serial.println();
     Serial.print("MAC Address: ");
     Serial.println( WiFi.macAddress() );
+    macAddr = WiFi.macAddress();
+
     Serial.println("WiFi connected");
     Serial.print("IP Address: ");
     IP = ipToString( WiFi.localIP() );
@@ -228,6 +262,7 @@ void setup() {
   JSONserver.begin();
   } else if(!activeConnection) {
     IP = "NO CONNECTION";
+    Serial.println();
     Serial.println("Connection to both networks failed.");
   }
   }
@@ -247,68 +282,68 @@ void setup() {
   
 }
 
-void makeWebpage()
-{
-  // Serial.println("making web page..");
-  webpage = F("<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"5\"><title>");
-  webpage += location;
-  webpage += F(" Sensor Data</title><style>#data{font-family: \"Trebuchet MS\", Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}#data td, #customers th{border: 1px solid #ddd;padding: 8px;}#data tr:nth-child(even){background-color: #f2f2f2;}#data tr:hover{background-color: #ddd;}#data th{padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #50AFFF;color: white;}</style></head><body><table id=\"data\"><tbody><tr><th>");
-  webpage += location;
-  webpage += " Data</th><th>Current Value</th></tr><tr><td>PM 10</td><td>";
-  webpage += String( pm100 );
-  webpage += "</td></tr><tr><td>PM 2.5</td><td>";
-  webpage += String( pm25_corrected );
-  webpage += "</td></tr><tr><td>PM 1.0</td><td>";
-  webpage += String( pm10 );
-  webpage += "</td></tr><tr><td>AQI</td><td>";
-  webpage += String( aqi );
-  webpage += "</td></tr><tr><td>CO<sub>2</sub></td><td>";
-  webpage += String( co2 );
-  webpage += " ppm</td></tr><tr><td>Temperature</td><td>";
-  webpage += String( temp );
-  webpage += "&#176;C</td></tr><tr><td>Humidity</td><td>";
-  webpage += String( rh );
-  webpage += "%</td></tr><tr><td>Heat Index</td><td>";
-  webpage += String( hIndex );
-  webpage += "&#176;C</td></tr>";
-  if (light_sensor_found)
-  {
-    webpage += "<tr><td>Light Intensity</td><td>";
-    webpage += String( lux );
-    webpage += " Lux</td></tr>";
-  }
-  webpage += "</tbody></table></body></html>";
-}
-
-void makeJSON()
-{
-  // Serial.println("making simple JSON page..");
-  JSON = "{\"location\": \"";
-  JSON += location;
-  JSON += "\", \"temperature\": \"";
-  JSON += String( temp );
-  JSON += "\", \"humidity\": \"";
-  JSON += String( rh );
-  JSON += "\", \"heat_index\": \"";
-  JSON += String( hIndex );
-  JSON += "\", \"CO2\": \"";
-  JSON += String( co2 );
-  JSON += "\", \"air_quality\":{\"PM10\": \"";
-  JSON += String( pm100 );
-  JSON += "\", \"PM2.5\": \"";
-  JSON += String( pm25_corrected );
-  JSON += "\", \"PM1\": \"";
-  JSON += String( pm10 );
-  JSON += "\", \"AQI\": \"";
-  JSON += String( aqi );
-  JSON += "\"}, \"light\":{\"IR\": \"";
-  JSON += String(ir);
-  JSON += "\", \"Vis\": \"";
-  JSON += String(vis);
-  JSON += "\", \"Lux\": \"";
-  JSON += String( lux );
-  JSON += "\"}}";
-}
+//void makeWebpage()
+//{
+//  // Serial.println("making web page..");
+//  webpage = F("<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"5\"><title>");
+//  webpage += location;
+//  webpage += F(" Sensor Data</title><style>#data{font-family: \"Trebuchet MS\", Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}#data td, #customers th{border: 1px solid #ddd;padding: 8px;}#data tr:nth-child(even){background-color: #f2f2f2;}#data tr:hover{background-color: #ddd;}#data th{padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #50AFFF;color: white;}</style></head><body><table id=\"data\"><tbody><tr><th>");
+//  webpage += location;
+//  webpage += " Data</th><th>Current Value</th></tr><tr><td>PM 10</td><td>";
+//  webpage += String( pm100 );
+//  webpage += "</td></tr><tr><td>PM 2.5</td><td>";
+//  webpage += String( pm25_corrected );
+//  webpage += "</td></tr><tr><td>PM 1.0</td><td>";
+//  webpage += String( pm10 );
+//  webpage += "</td></tr><tr><td>AQI</td><td>";
+//  webpage += String( aqi );
+//  webpage += "</td></tr><tr><td>CO<sub>2</sub></td><td>";
+//  webpage += String( co2 );
+//  webpage += " ppm</td></tr><tr><td>Temperature</td><td>";
+//  webpage += String( temp );
+//  webpage += "&#176;C</td></tr><tr><td>Humidity</td><td>";
+//  webpage += String( rh );
+//  webpage += "%</td></tr><tr><td>Heat Index</td><td>";
+//  webpage += String( hIndex );
+//  webpage += "&#176;C</td></tr>";
+//  if (light_sensor_found)
+//  {
+//    webpage += "<tr><td>Light Intensity</td><td>";
+//    webpage += String( lux );
+//    webpage += " Lux</td></tr>";
+//  }
+//  webpage += "</tbody></table></body></html>";
+//}
+//
+//void makeJSON()
+//{
+//  // Serial.println("making simple JSON page..");
+//  JSON = "{\"location\": \"";
+//  JSON += location;
+//  JSON += "\", \"temperature\": \"";
+//  JSON += String( temp );
+//  JSON += "\", \"humidity\": \"";
+//  JSON += String( rh );
+//  JSON += "\", \"heat_index\": \"";
+//  JSON += String( hIndex );
+//  JSON += "\", \"CO2\": \"";
+//  JSON += String( co2 );
+//  JSON += "\", \"air_quality\":{\"PM10\": \"";
+//  JSON += String( pm100 );
+//  JSON += "\", \"PM2.5\": \"";
+//  JSON += String( pm25_corrected );
+//  JSON += "\", \"PM1\": \"";
+//  JSON += String( pm10 );
+//  JSON += "\", \"AQI\": \"";
+//  JSON += String( aqi );
+//  JSON += "\"}, \"light\":{\"IR\": \"";
+//  JSON += String(ir);
+//  JSON += "\", \"Vis\": \"";
+//  JSON += String(vis);
+//  JSON += "\", \"Lux\": \"";
+//  JSON += String( lux );
+//  JSON += "\"}}";
+//}
 
 void calculatePM()
 {
@@ -427,15 +462,18 @@ void displayInfo() {
   if (displayCount == 0 )
   {
     s = "PM2.5: ";
-    s += String( pm25_corrected  );
+    if(pm25_corrected != 0) s += String( pm25_corrected  );
+    else s += "OFFLINE";
     display.setFont(ArialMT_Plain_16);
     display.drawString(0, 11, s);
     s = "AQI  : ";
-    s += String( aqi );
+    if(aqi != 0) s += String( aqi );
+    else s += "OFFLINE";
     display.drawString(0, 27, s);
     s = "CO2: ";
-    s += String( co2 );
-    s += " ppm";
+   if(co2 != 0 && co2 != 32767) {s += String( co2 ); s += " ppm";}
+   else s += "OFFLINE";
+    
     display.drawString(0, 43, s);
   }
   else if (displayCount == 1)
@@ -455,6 +493,22 @@ void displayInfo() {
       s += String( lux );
       display.drawString(0, 43, s);
     }
+    if(!vocConnected) displayCount = -1;
+  }
+  else if (vocConnected && displayCount == 2) {
+    s = "VOCs: ";
+    s += readVOC();
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(0, 11, s);
+
+    // For testing and debugging only, to be removed in deployment
+    s = "VOC CO2: ";
+    s += String (vocCO2);
+    s += " ppm";
+    display.drawString(0, 27, s);
+  
+
+    
     displayCount = -1;
   }
   displayCount += 1;
@@ -472,7 +526,7 @@ void uploadData() {
     int lux_avg2 = (int)( ((double)lux_avg) / loopCnt + 0.5);
     if ( WiFi.status() == WL_CONNECTED ) {
       HTTPClient http;
-      http.begin("http://iot.concordiashanghai.org/data.php"); //HTTP
+      http.begin("http://sms.concordiashanghai.org/bdst_insert.php"); //HTTP
       //http.begin("iot.concordiashanghai.org", 80, "/data.php"); //HTTP
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       dtostrf(temp_avg2, 6, 2, temperature);
@@ -495,6 +549,8 @@ void uploadData() {
       data += pm100_avg2;
       data += "&light=";
       data += lux_avg2;
+      data += "&VOC=";
+      data += vocTVOC;
       //data = "location=H529&temperature=23.00&humidity=33.34&co2=412&pm25=5.52&pm10=6&pm100=21&light=334";
 
       Serial.println(data);
@@ -569,6 +625,46 @@ void readLight()
   lux = light_sensor.calculateLux(full, ir);
 }
 
+String readVOC() {
+  bool vocTime = (millis() - lastTime) > vocWarmup;
+  bool burnInTime = (millis() - lastTime) > vocBurnin;
+  if (!baselineAvailable && !burnInTime) {
+    return "BURNIN";
+    vocTVOC = -1;
+  }
+
+  if (!baselineAvailable && burnInTime) {
+    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom3) << 8 & 0xFFFF | EEPROM.get(3, eeprom4));
+    result = vocSensor.getBaseline();
+    EEPROM.put(0, 0xA5);
+    EEPROM.put(1, 0xB2);
+    EEPROM.put(2, (result >> 8) & 0x00FF);
+    EEPROM.put(3, result & 0x00FF);
+    baselineAvailable = true;
+    errorStatus = vocSensor.setBaseline(baselineToApply);
+    if(errorStatus == CCS811Core::SENSOR_SUCCESS) baselineLoaded = true;
+    else baselineLoaded = false;
+  }
+  
+  if (baselineAvailable && !baselineLoaded) {
+    return "ERROR";
+    baselineAvailable = false;
+    vocTVOC = -1;
+  }
+  if (baselineAvailable && baselineLoaded && !vocTime) {
+    return "WARMUP";  
+    vocTVOC = -1;
+  }  
+  if (baselineAvailable && baselineLoaded && vocTime) { 
+    if (vocSensor.dataAvailable()) {
+      vocSensor.readAlgorithmResults();
+      vocCO2 = vocSensor.getCO2();
+      vocTVOC = vocSensor.getTVOC();
+      return (String)vocTVOC;
+    } else vocLevels = -1;
+  }
+}
+
 void loop() {
   ESP.wdtFeed();
   pmSerial.enableRx(true);
@@ -577,6 +673,7 @@ void loop() {
   pmSerial.flush();
   //pmSerial.write(PMstartup, 7);
   delay(1000);
+  readVOC();
   wdt_reset();
   if (pmSerial.find(0x42))
   {
@@ -612,8 +709,8 @@ void loop() {
   }
   uploadData();
   wdt_reset();
-  makeWebpage();
-  makeJSON();
+  //makeWebpage();
+  //makeJSON();
   delay(1000);
   wdt_reset();
   digitalWrite(LED, LOW);
