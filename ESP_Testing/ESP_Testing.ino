@@ -15,8 +15,8 @@
 #include "ESP8266Ping.h"
 
 
-const char* ssid = "CISS_Visitors";
-const char* pwd = "";
+const char* ssid = "TP-LINK 2.4";
+const char* pwd = "7809882089";
 const char* remote_host = "concordiashanghai.org";
 const char* remote_host2 = "baidu.com";
 int i = 0;
