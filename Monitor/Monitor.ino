@@ -49,7 +49,7 @@ extern "C" {
 // Initialize the OLED display using Wire library
 //#define offset 0x00
 #include "SH1106.h" // alias for `#include "SH1106Wire.h"
-SH1106 display(0x3c, 5, 4);
+SH1106 display(0x3c, 4, 5);
 //#include "SSD1306.h" // alias for `#include "SSD1306Wire.h"
 //SSD1306  display(0x3c, 4, 5);
 
@@ -69,9 +69,14 @@ Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for 
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
-const char* location = "H529";
+bool activeConnection= true;
+
+const char* location = "TEST01";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
+const char* ssidAlt = "CISS_Visitors";
+const char* passwordAlt = "";
+
 static unsigned long uploadInterval = 1000 * 60 * 5;  //ms between uploads
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
@@ -147,22 +152,85 @@ void setup() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
-
+  int i = 0;
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
     Serial.print(".");
+    i++;
+    if(i>20) {
+      activeConnection = false;
+      break;
+    }
   }
-  Serial.println();
-  Serial.println("WiFi connected");
+  if(activeConnection) {
+    Serial.println();
+    Serial.println("WiFi connected");
 
-  Serial.println();
-  Serial.print("MAC Address: ");
-  Serial.println( WiFi.macAddress() );
-  Serial.println("WiFi connected");
-  Serial.print("IP Address: ");
-  IP = ipToString( WiFi.localIP() );
-  Serial.println( IP );
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/html", webpage);
+  });
+  server.begin();
+
+  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/json", JSON);                  // or "text/plain"?
+  });
+  JSONserver.begin();
+  }
+  else if(!activeConnection) {
+    WiFi.mode(WIFI_OFF);
+    (500);
+    Serial.println();
+    Serial.print("Connection to ");
+    Serial.print(ssid);
+    Serial.println(" failed after 10 seconds.");
+    Serial.print("Attempting to connect to ");
+    Serial.print(ssidAlt);
+    WiFi.begin(ssidAlt, passwordAlt);
+    activeConnection = true;
+    i = 0;
+    while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+    i++;
+    if(i>20) {
+      activeConnection = false;
+      break;
+    }
+  }
+  if(activeConnection) {
+    Serial.println();
+    Serial.println("WiFi connected");
+
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/html", webpage);
+  });
+  server.begin();
+
+  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/json", JSON);                  // or "text/plain"?
+  });
+  JSONserver.begin();
+  } else if(!activeConnection) {
+    IP = "NO CONNECTION";
+    Serial.println("Connection to both networks failed.");
+  }
+  }
 
   //Start server
   //WiFi.mode( WIFI_OFF );
@@ -176,15 +244,7 @@ void setup() {
   // if DNSServer is started with "*" for domain name, it will reply with provided IP to all DNS request
   //dnsServer.start(DNS_PORT, "*", apIP);
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/html", webpage);
-  });
-  server.begin();
-
-  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "application/json", JSON);                  // or "text/plain"?
-  });
-  JSONserver.begin();
+  
 }
 
 void makeWebpage()
@@ -353,9 +413,15 @@ void displayInfo() {
 
   display.clear();
   String s = location;
-  s += " (";
-  s += IP;
-  s += ")";
+  if(activeConnection) {
+    s += " (";
+    s += IP;
+    s += ")";
+  } else {
+    s += "(";
+    s += IP;
+    s += ")";
+  }
   display.setFont(ArialMT_Plain_10);
   display.drawString(0, 0, s);
   if (displayCount == 0 )
