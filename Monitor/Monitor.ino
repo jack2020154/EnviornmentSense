@@ -71,7 +71,7 @@ CCS811Core::status errorStatus;
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
-bool activeConnection= true;
+bool activeConnection = true;
 
 bool vocConnected = true;
 bool baselineAvailable = false;
@@ -189,12 +189,12 @@ void setup() {
     delay(500);
     Serial.print(".");
     i++;
-    if(i>20) {
+    if (i > 20) {
       activeConnection = false;
       break;
     }
   }
-  if(activeConnection) {
+  if (activeConnection) {
     Serial.println();
     Serial.println("WiFi connected");
 
@@ -207,16 +207,16 @@ void setup() {
     IP = ipToString( WiFi.localIP() );
     Serial.println( IP );
     server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/html", webpage);
-  });
-  server.begin();
+      request->send(200, "text/html", webpage);
+    });
+    server.begin();
 
-  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "application/json", JSON);                  // or "text/plain"?
-  });
-  JSONserver.begin();
+    JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+      request->send(200, "application/json", JSON);                  // or "text/plain"?
+    });
+    JSONserver.begin();
   }
-  else if(!activeConnection) {
+  else if (!activeConnection) {
     WiFi.mode(WIFI_OFF);
     (500);
     Serial.println();
@@ -229,122 +229,44 @@ void setup() {
     activeConnection = true;
     i = 0;
     while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-    i++;
-    if(i>20) {
-      activeConnection = false;
-      break;
+    {
+      delay(500);
+      Serial.print(".");
+      i++;
+      if (i > 20) {
+        activeConnection = false;
+        break;
+      }
+    }
+    if (activeConnection) {
+      Serial.println();
+      Serial.println("WiFi connected");
+
+      Serial.println();
+      Serial.print("MAC Address: ");
+      Serial.println( WiFi.macAddress() );
+      macAddr = WiFi.macAddress();
+
+      Serial.println("WiFi connected");
+      Serial.print("IP Address: ");
+      IP = ipToString( WiFi.localIP() );
+      Serial.println( IP );
+      server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+        request->send(200, "text/html", webpage);
+      });
+      server.begin();
+
+      JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+        request->send(200, "application/json", JSON);                  // or "text/plain"?
+      });
+      JSONserver.begin();
+    } else if (!activeConnection) {
+      IP = "NO CONNECTION";
+      Serial.println();
+      Serial.println("Connection to both networks failed.");
     }
   }
-  if(activeConnection) {
-    Serial.println();
-    Serial.println("WiFi connected");
-
-    Serial.println();
-    Serial.print("MAC Address: ");
-    Serial.println( WiFi.macAddress() );
-    macAddr = WiFi.macAddress();
-
-    Serial.println("WiFi connected");
-    Serial.print("IP Address: ");
-    IP = ipToString( WiFi.localIP() );
-    Serial.println( IP );
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/html", webpage);
-  });
-  server.begin();
-
-  JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "application/json", JSON);                  // or "text/plain"?
-  });
-  JSONserver.begin();
-  } else if(!activeConnection) {
-    IP = "NO CONNECTION";
-    Serial.println();
-    Serial.println("Connection to both networks failed.");
-  }
-  }
-
-  //Start server
-  //WiFi.mode( WIFI_OFF );
-  //WiFi.forceSleepBegin();       // turn off ESP8266 RF
-  //delay( 1 );                   // give RF section time to shutdown
-  //WiFi.softAP(ssid, password, channel, hidden);
-  //WiFi.softAP(location2, "", 14);
-  //IPAddress apIP( 192,168,1,1 );  // default ip address for local network
-  //IPAddress subnet(255,255,255,0);
-  //WiFi.softAPConfig(apIP, apIP, subnet);
-  // if DNSServer is started with "*" for domain name, it will reply with provided IP to all DNS request
-  //dnsServer.start(DNS_PORT, "*", apIP);
-
-  
 }
-
-//void makeWebpage()
-//{
-//  // Serial.println("making web page..");
-//  webpage = F("<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"5\"><title>");
-//  webpage += location;
-//  webpage += F(" Sensor Data</title><style>#data{font-family: \"Trebuchet MS\", Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}#data td, #customers th{border: 1px solid #ddd;padding: 8px;}#data tr:nth-child(even){background-color: #f2f2f2;}#data tr:hover{background-color: #ddd;}#data th{padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #50AFFF;color: white;}</style></head><body><table id=\"data\"><tbody><tr><th>");
-//  webpage += location;
-//  webpage += " Data</th><th>Current Value</th></tr><tr><td>PM 10</td><td>";
-//  webpage += String( pm100 );
-//  webpage += "</td></tr><tr><td>PM 2.5</td><td>";
-//  webpage += String( pm25_corrected );
-//  webpage += "</td></tr><tr><td>PM 1.0</td><td>";
-//  webpage += String( pm10 );
-//  webpage += "</td></tr><tr><td>AQI</td><td>";
-//  webpage += String( aqi );
-//  webpage += "</td></tr><tr><td>CO<sub>2</sub></td><td>";
-//  webpage += String( co2 );
-//  webpage += " ppm</td></tr><tr><td>Temperature</td><td>";
-//  webpage += String( temp );
-//  webpage += "&#176;C</td></tr><tr><td>Humidity</td><td>";
-//  webpage += String( rh );
-//  webpage += "%</td></tr><tr><td>Heat Index</td><td>";
-//  webpage += String( hIndex );
-//  webpage += "&#176;C</td></tr>";
-//  if (light_sensor_found)
-//  {
-//    webpage += "<tr><td>Light Intensity</td><td>";
-//    webpage += String( lux );
-//    webpage += " Lux</td></tr>";
-//  }
-//  webpage += "</tbody></table></body></html>";
-//}
-//
-//void makeJSON()
-//{
-//  // Serial.println("making simple JSON page..");
-//  JSON = "{\"location\": \"";
-//  JSON += location;
-//  JSON += "\", \"temperature\": \"";
-//  JSON += String( temp );
-//  JSON += "\", \"humidity\": \"";
-//  JSON += String( rh );
-//  JSON += "\", \"heat_index\": \"";
-//  JSON += String( hIndex );
-//  JSON += "\", \"CO2\": \"";
-//  JSON += String( co2 );
-//  JSON += "\", \"air_quality\":{\"PM10\": \"";
-//  JSON += String( pm100 );
-//  JSON += "\", \"PM2.5\": \"";
-//  JSON += String( pm25_corrected );
-//  JSON += "\", \"PM1\": \"";
-//  JSON += String( pm10 );
-//  JSON += "\", \"AQI\": \"";
-//  JSON += String( aqi );
-//  JSON += "\"}, \"light\":{\"IR\": \"";
-//  JSON += String(ir);
-//  JSON += "\", \"Vis\": \"";
-//  JSON += String(vis);
-//  JSON += "\", \"Lux\": \"";
-//  JSON += String( lux );
-//  JSON += "\"}}";
-//}
-
 void calculatePM()
 {
   unsigned short sum = 0;
@@ -448,7 +370,7 @@ void displayInfo() {
 
   display.clear();
   String s = location;
-  if(activeConnection) {
+  if (activeConnection) {
     s += " (";
     s += IP;
     s += ")";
@@ -462,18 +384,21 @@ void displayInfo() {
   if (displayCount == 0 )
   {
     s = "PM2.5: ";
-    if(pm25_corrected != 0) s += String( pm25_corrected  );
+    if (pm25_corrected != 0) s += String( pm25_corrected  );
     else s += "OFFLINE";
     display.setFont(ArialMT_Plain_16);
     display.drawString(0, 11, s);
     s = "AQI  : ";
-    if(aqi != 0) s += String( aqi );
+    if (aqi != 0) s += String( aqi );
     else s += "OFFLINE";
     display.drawString(0, 27, s);
     s = "CO2: ";
-   if(co2 != 0 && co2 != 32767) {s += String( co2 ); s += " ppm";}
-   else s += "OFFLINE";
-    
+    if (co2 != 0 && co2 != 32767) {
+      s += String( co2 );
+      s += " ppm";
+    }
+    else s += "OFFLINE";
+
     display.drawString(0, 43, s);
   }
   else if (displayCount == 1)
@@ -493,7 +418,7 @@ void displayInfo() {
       s += String( lux );
       display.drawString(0, 43, s);
     }
-    if(!vocConnected) displayCount = -1;
+    if (!vocConnected) displayCount = -1;
   }
   else if (vocConnected && displayCount == 2) {
     s = "VOCs: ";
@@ -506,9 +431,9 @@ void displayInfo() {
     s += String (vocCO2);
     s += " ppm";
     display.drawString(0, 27, s);
-  
 
-    
+
+
     displayCount = -1;
   }
   displayCount += 1;
@@ -551,7 +476,6 @@ void uploadData() {
       data += lux_avg2;
       data += "&VOC=";
       data += vocTVOC;
-      //data = "location=H529&temperature=23.00&humidity=33.34&co2=412&pm25=5.52&pm10=6&pm100=21&light=334";
 
       Serial.println(data);
       wdt_reset();
@@ -640,22 +564,23 @@ String readVOC() {
     EEPROM.put(1, 0xB2);
     EEPROM.put(2, (result >> 8) & 0x00FF);
     EEPROM.put(3, result & 0x00FF);
+    EEPROM.commit();
     baselineAvailable = true;
     errorStatus = vocSensor.setBaseline(baselineToApply);
-    if(errorStatus == CCS811Core::SENSOR_SUCCESS) baselineLoaded = true;
+    if (errorStatus == CCS811Core::SENSOR_SUCCESS) baselineLoaded = true;
     else baselineLoaded = false;
   }
-  
+
   if (baselineAvailable && !baselineLoaded) {
     return "ERROR";
     baselineAvailable = false;
     vocTVOC = -1;
   }
   if (baselineAvailable && baselineLoaded && !vocTime) {
-    return "WARMUP";  
+    return "WARMUP";
     vocTVOC = -1;
-  }  
-  if (baselineAvailable && baselineLoaded && vocTime) { 
+  }
+  if (baselineAvailable && baselineLoaded && vocTime) {
     if (vocSensor.dataAvailable()) {
       vocSensor.readAlgorithmResults();
       vocCO2 = vocSensor.getCO2();
