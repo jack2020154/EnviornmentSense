@@ -38,7 +38,7 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_TSL2591.h"
-#include <DNSServer.h>
+//#include <DNSServer.h>
 #include <EEPROM.h>
 #include "concordia2.h"
 #include "SparkFunCCS811.h"
@@ -85,7 +85,7 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-const char* location = "TEST01";
+const char* location = "TEST02";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
 const char* ssidAlt = "TP-LINK 2.4";
@@ -128,7 +128,7 @@ static String IP, data;
 static long lastTime = millis();
 static byte LED = 16;                 //D0 (GPIO 16)
 
-DNSServer dnsServer;
+
 AsyncWebServer server(80);
 AsyncWebServer JSONserver(8080);
 CCS811 vocSensor(CCS811_ADDR);
@@ -206,19 +206,10 @@ void setup() {
     Serial.print("IP Address: ");
     IP = ipToString( WiFi.localIP() );
     Serial.println( IP );
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-      request->send(200, "text/html", webpage);
-    });
-    server.begin();
-
-    JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-      request->send(200, "application/json", JSON);                  // or "text/plain"?
-    });
-    JSONserver.begin();
   }
   else if (!activeConnection) {
     WiFi.mode(WIFI_OFF);
-    (500);
+    delay(500);
     Serial.println();
     Serial.print("Connection to ");
     Serial.print(ssid);
@@ -251,15 +242,6 @@ void setup() {
       Serial.print("IP Address: ");
       IP = ipToString( WiFi.localIP() );
       Serial.println( IP );
-      server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-        request->send(200, "text/html", webpage);
-      });
-      server.begin();
-
-      JSONserver.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-        request->send(200, "application/json", JSON);                  // or "text/plain"?
-      });
-      JSONserver.begin();
     } else if (!activeConnection) {
       IP = "NO CONNECTION";
       Serial.println();
@@ -550,10 +532,12 @@ void readLight()
 }
 
 String readVOC() {
-  bool vocTime = (millis() - lastTime) > vocWarmup;
-  bool burnInTime = (millis() - lastTime) > vocBurnin;
+  bool vocTime = millis() > vocWarmup;
+  bool burnInTime = millis() > vocBurnin;
   if (!baselineAvailable && !burnInTime) {
     return "BURNIN";
+    vocSensor.readAlgorithmResults();
+    vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
 
@@ -574,10 +558,14 @@ String readVOC() {
   if (baselineAvailable && !baselineLoaded) {
     return "ERROR";
     baselineAvailable = false;
+    vocSensor.readAlgorithmResults();
+    vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
   if (baselineAvailable && baselineLoaded && !vocTime) {
     return "WARMUP";
+    vocSensor.readAlgorithmResults();
+    vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
   if (baselineAvailable && baselineLoaded && vocTime) {
@@ -586,7 +574,7 @@ String readVOC() {
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
       return (String)vocTVOC;
-    } else vocLevels = -1;
+    }
   }
 }
 
