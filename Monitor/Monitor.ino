@@ -73,11 +73,13 @@ SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 bool activeConnection = true;
 
+bool wifiConnection = true;
+
 bool vocConnected = true;
 bool baselineAvailable = false;
 bool baselineLoaded = false;
-byte eeprom1, eeprom2;
-unsigned int eeprom3, eeprom4;
+byte eeprom0, eeprom1, eeprom4, eeprom5;
+unsigned int eeprom2, eeprom3;
 unsigned int result;
 
 int vocLevels = -1;
@@ -85,15 +87,15 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-const char* location = "TEST02";
+const char* location = "esp_29";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
-const char* ssidAlt = "TP-LINK 2.4";
-const char* passwordAlt = "7809882089";
+const char* ssidAlt = "CISS_Visitors";
+const char* passwordAlt = "";
 
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
-static unsigned long vocBurnin = 1000 * 60 * 60 * 48; // Time for VOC burnin
+static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
@@ -160,93 +162,114 @@ void setup() {
 
   EEPROM.begin(512);
   CCS811Core::status returnCode = vocSensor.begin();
-  if ((EEPROM.get(0, eeprom1) == 0xA5) && (EEPROM.get(1, eeprom2) == 0xB2)) {
-    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom3) << 8 & 0xFFFF | EEPROM.get(3, eeprom4));
+  if ((EEPROM.get(0, eeprom0) == 0xA5) && (EEPROM.get(1, eeprom1) == 0xB2)) {
+    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
     Serial.println("Baseline available");
     Serial.println("Applied baseline: ");
     Serial.println(baselineToApply, HEX);
     baselineAvailable = true;
     errorStatus = vocSensor.setBaseline( baselineToApply );
-    if (errorStatus == CCS811Core::SENSOR_SUCCESS)
+    if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
       baselineLoaded = true;
-  }
-
-
-  // Connect to WiFi network
-  //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
-  //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
-  WiFi.mode(WIFI_OFF);
-  delay(1000);
-  WiFi.mode(WIFI_STA);
-  Serial.println();
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  int i = 0;
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-    i++;
-    if (i > 20) {
-      activeConnection = false;
-      break;
+    } else {
+      Serial.println("Baseline not loaded");
     }
-  }
-  if (activeConnection) {
-    Serial.println();
-    Serial.println("WiFi connected");
+    if ((EEPROM.get(4, eeprom4) == 0xFF) && (EEPROM.get(5, eeprom5) == 0xFF)) {
+      Serial.println("First time plug in. Resetting EEPROM 0x000000100 and 0x000000101 to 0");
+      EEPROM.put(4, 0x00);
+      EEPROM.put(5, 0x00);
+    }
+    unsigned int memval4 = EEPROM.get(4, eeprom4);
+    unsigned int memval5 = EEPROM.get(5, eeprom5);
+    unsigned int currentTime = memval4 * 256 + memval5;
+    Serial.print("Val at 4: ");
+    Serial.println(memval4);
+    Serial.print("Val at 5: ");
+    Serial.println(memval5);
+    Serial.print("Current burn in time: ");
+    Serial.print(currentTime);
+    Serial.println(" minutes");
+    // Connect to WiFi network
+    //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
+    //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
+    if (wifiConnection) {
+      WiFi.mode(WIFI_OFF);
+      delay(1000);
+      WiFi.mode(WIFI_STA);
+      Serial.println();
+      Serial.println();
+      Serial.print("Connecting to ");
+      Serial.println(ssid);
+      WiFi.begin(ssid, password);
+      int i = 0;
+      while (WiFi.status() != WL_CONNECTED)
+      {
+        delay(500);
+        Serial.print(".");
+        i++;
+        if (i > 20) {
+          activeConnection = false;
+          break;
+        }
+      }
+      if (activeConnection) {
+        Serial.println();
+        Serial.println("WiFi connected");
 
-    Serial.println();
-    Serial.print("MAC Address: ");
-    Serial.println( WiFi.macAddress() );
-    macAddr = WiFi.macAddress();
-    Serial.println("WiFi connected");
-    Serial.print("IP Address: ");
-    IP = ipToString( WiFi.localIP() );
-    Serial.println( IP );
-  }
-  else if (!activeConnection) {
-    WiFi.mode(WIFI_OFF);
-    delay(500);
-    Serial.println();
-    Serial.print("Connection to ");
-    Serial.print(ssid);
-    Serial.println(" failed after 10 seconds.");
-    Serial.print("Attempting to connect to ");
-    Serial.print(ssidAlt);
-    WiFi.begin(ssidAlt, passwordAlt);
-    activeConnection = true;
-    i = 0;
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(500);
-      Serial.print(".");
-      i++;
-      if (i > 20) {
-        activeConnection = false;
-        break;
+        Serial.println();
+        Serial.print("MAC Address: ");
+        Serial.println( WiFi.macAddress() );
+        macAddr = WiFi.macAddress();
+        Serial.println("WiFi connected");
+        Serial.print("IP Address: ");
+        IP = ipToString( WiFi.localIP() );
+        Serial.println( IP );
+      }
+      else if (!activeConnection) {
+        WiFi.mode(WIFI_OFF);
+        delay(500);
+        Serial.println();
+        Serial.print("Connection to ");
+        Serial.print(ssid);
+        Serial.println(" failed after 10 seconds.");
+        Serial.print("Attempting to connect to ");
+        Serial.print(ssidAlt);
+        WiFi.begin(ssidAlt, passwordAlt);
+        activeConnection = true;
+        i = 0;
+        while (WiFi.status() != WL_CONNECTED)
+        {
+          delay(500);
+          Serial.print(".");
+          i++;
+          if (i > 20) {
+            activeConnection = false;
+            break;
+          }
+        }
+        if (activeConnection) {
+          Serial.println();
+          Serial.println("WiFi connected");
+
+          Serial.println();
+          Serial.print("MAC Address: ");
+          Serial.println( WiFi.macAddress() );
+          macAddr = WiFi.macAddress();
+
+          Serial.println("WiFi connected");
+          Serial.print("IP Address: ");
+          IP = ipToString( WiFi.localIP() );
+          Serial.println( IP );
+        } else if (!activeConnection) {
+          IP = "NO CONNECTION";
+          Serial.println();
+          Serial.println("Connection to both networks failed.");
+        }
       }
     }
-    if (activeConnection) {
-      Serial.println();
-      Serial.println("WiFi connected");
-
-      Serial.println();
-      Serial.print("MAC Address: ");
-      Serial.println( WiFi.macAddress() );
-      macAddr = WiFi.macAddress();
-
-      Serial.println("WiFi connected");
-      Serial.print("IP Address: ");
-      IP = ipToString( WiFi.localIP() );
-      Serial.println( IP );
-    } else if (!activeConnection) {
-      IP = "NO CONNECTION";
-      Serial.println();
-      Serial.println("Connection to both networks failed.");
-    }
+  }
+  else if (!wifiConnection) {
+    IP = "TEST MODE";
   }
 }
 void calculatePM()
@@ -532,10 +555,13 @@ void readLight()
 }
 
 String readVOC() {
+  unsigned int memval4 = EEPROM.get(4, eeprom4);
+  unsigned int memval5 = EEPROM.get(5, eeprom5);
+  unsigned int currentTime = memval4 * 256 + memval5;
   bool vocTime = millis() > vocWarmup;
-  bool burnInTime = millis() > vocBurnin;
+  bool burnInTime = currentTime > vocBurnin;
   if (!baselineAvailable && !burnInTime) {
-    return "BURNIN";
+    return (String)((int)currentTime / burnInTime) + "% Burn";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
@@ -551,7 +577,10 @@ String readVOC() {
     EEPROM.commit();
     baselineAvailable = true;
     errorStatus = vocSensor.setBaseline(baselineToApply);
-    if (errorStatus == CCS811Core::SENSOR_SUCCESS) baselineLoaded = true;
+    if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
+      baselineLoaded = true;
+      Serial.println("Baseline loaded");
+    }
     else baselineLoaded = false;
   }
 
@@ -578,6 +607,25 @@ String readVOC() {
   }
 }
 
+void addTime() {
+  if (millis() % 60000 < 2000 ) {
+    unsigned int memval4 = EEPROM.get(4, eeprom4);
+    unsigned int memval5 = EEPROM.get(5, eeprom5);
+    unsigned int currentTime = memval4 * 256 + memval5;
+    Serial.print("Val at 4: ");
+    Serial.println(memval4);
+    Serial.print("Val at 5: ");
+    Serial.println(memval5);
+    Serial.print("Current burn in time: ");
+    Serial.print(currentTime);
+    Serial.println(" minutes");
+    currentTime++;
+    EEPROM.put(4, (currentTime >> 8) & 0x00FF);
+    EEPROM.put(5, currentTime & 0x00FF);
+    EEPROM.commit();
+  }
+}
+
 void loop() {
   ESP.wdtFeed();
   pmSerial.enableRx(true);
@@ -585,7 +633,7 @@ void loop() {
   digitalWrite(LED, LOW);
   pmSerial.flush();
   //pmSerial.write(PMstartup, 7);
-  delay(1000);
+  delay(750);
   readVOC();
   wdt_reset();
   if (pmSerial.find(0x42))
@@ -620,7 +668,7 @@ void loop() {
   {
     readLight();
   }
-  uploadData();
+  if (activeConnection)uploadData();
   wdt_reset();
   //makeWebpage();
   //makeJSON();
@@ -638,5 +686,6 @@ void loop() {
   }
   wdt_reset();
   displayInfo();
+  addTime();
   digitalWrite(LED, HIGH);
 }
