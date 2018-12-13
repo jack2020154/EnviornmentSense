@@ -87,7 +87,7 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-const char* location = "esp_29";
+const char* location = "esp_10";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
 const char* ssidAlt = "CISS_Visitors";
@@ -171,37 +171,73 @@ void setup() {
     errorStatus = vocSensor.setBaseline( baselineToApply );
     if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
       baselineLoaded = true;
-    } else {
-      Serial.println("Baseline not loaded");
     }
-    if ((EEPROM.get(4, eeprom4) == 0xFF) && (EEPROM.get(5, eeprom5) == 0xFF)) {
-      Serial.println("First time plug in. Resetting EEPROM 0x000000100 and 0x000000101 to 0");
-      EEPROM.put(4, 0x00);
-      EEPROM.put(5, 0x00);
+  } else {
+    Serial.println("Baseline not loaded");
+  }
+  if ((EEPROM.get(4, eeprom4) == 0xFF) && (EEPROM.get(5, eeprom5) == 0xFF)) {
+    Serial.println("First time plug in. Resetting EEPROM 0x000000100 and 0x000000101 to 0");
+    EEPROM.put(4, 0x00);
+    EEPROM.put(5, 0x00);
+  }
+  unsigned int memval4 = EEPROM.get(4, eeprom4);
+  unsigned int memval5 = EEPROM.get(5, eeprom5);
+  unsigned int currentTime = memval4 * 256 + memval5;
+  Serial.print("Val at 4: ");
+  Serial.println(memval4);
+  Serial.print("Val at 5: ");
+  Serial.println(memval5);
+  Serial.print("Current burn in time: ");
+  Serial.print(currentTime);
+  Serial.println(" minutes");
+  // Connect to WiFi network
+  //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
+  //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
+  if (wifiConnection) {
+    WiFi.mode(WIFI_OFF);
+    delay(1000);
+    WiFi.mode(WIFI_STA);
+    Serial.println();
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+    int i = 0;
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      Serial.print(".");
+      i++;
+      if (i > 20) {
+        activeConnection = false;
+        break;
+      }
     }
-    unsigned int memval4 = EEPROM.get(4, eeprom4);
-    unsigned int memval5 = EEPROM.get(5, eeprom5);
-    unsigned int currentTime = memval4 * 256 + memval5;
-    Serial.print("Val at 4: ");
-    Serial.println(memval4);
-    Serial.print("Val at 5: ");
-    Serial.println(memval5);
-    Serial.print("Current burn in time: ");
-    Serial.print(currentTime);
-    Serial.println(" minutes");
-    // Connect to WiFi network
-    //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
-    //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
-    if (wifiConnection) {
+    if (activeConnection) {
+      Serial.println();
+      Serial.println("WiFi connected");
+
+      Serial.println();
+      Serial.print("MAC Address: ");
+      Serial.println( WiFi.macAddress() );
+      macAddr = WiFi.macAddress();
+      Serial.println("WiFi connected");
+      Serial.print("IP Address: ");
+      IP = ipToString( WiFi.localIP() );
+      Serial.println( IP );
+    }
+    else if (!activeConnection) {
       WiFi.mode(WIFI_OFF);
-      delay(1000);
-      WiFi.mode(WIFI_STA);
+      delay(500);
       Serial.println();
-      Serial.println();
-      Serial.print("Connecting to ");
-      Serial.println(ssid);
-      WiFi.begin(ssid, password);
-      int i = 0;
+      Serial.print("Connection to ");
+      Serial.print(ssid);
+      Serial.println(" failed after 10 seconds.");
+      Serial.print("Attempting to connect to ");
+      Serial.print(ssidAlt);
+      WiFi.begin(ssidAlt, passwordAlt);
+      activeConnection = true;
+      i = 0;
       while (WiFi.status() != WL_CONNECTED)
       {
         delay(500);
@@ -220,57 +256,19 @@ void setup() {
         Serial.print("MAC Address: ");
         Serial.println( WiFi.macAddress() );
         macAddr = WiFi.macAddress();
+
         Serial.println("WiFi connected");
         Serial.print("IP Address: ");
         IP = ipToString( WiFi.localIP() );
         Serial.println( IP );
-      }
-      else if (!activeConnection) {
-        WiFi.mode(WIFI_OFF);
-        delay(500);
+      } else if (!activeConnection) {
+        IP = "NO CONNECTION";
         Serial.println();
-        Serial.print("Connection to ");
-        Serial.print(ssid);
-        Serial.println(" failed after 10 seconds.");
-        Serial.print("Attempting to connect to ");
-        Serial.print(ssidAlt);
-        WiFi.begin(ssidAlt, passwordAlt);
-        activeConnection = true;
-        i = 0;
-        while (WiFi.status() != WL_CONNECTED)
-        {
-          delay(500);
-          Serial.print(".");
-          i++;
-          if (i > 20) {
-            activeConnection = false;
-            break;
-          }
-        }
-        if (activeConnection) {
-          Serial.println();
-          Serial.println("WiFi connected");
-
-          Serial.println();
-          Serial.print("MAC Address: ");
-          Serial.println( WiFi.macAddress() );
-          macAddr = WiFi.macAddress();
-
-          Serial.println("WiFi connected");
-          Serial.print("IP Address: ");
-          IP = ipToString( WiFi.localIP() );
-          Serial.println( IP );
-        } else if (!activeConnection) {
-          IP = "NO CONNECTION";
-          Serial.println();
-          Serial.println("Connection to both networks failed.");
-        }
+        Serial.println("Connection to both networks failed.");
       }
     }
   }
-  else if (!wifiConnection) {
-    IP = "TEST MODE";
-  }
+else if (!wifiConnection) IP = "TEST MODE";
 }
 void calculatePM()
 {
@@ -427,7 +425,8 @@ void displayInfo() {
   }
   else if (vocConnected && displayCount == 2) {
     s = "VOCs: ";
-    s += readVOC();
+    String vocVal = readVOC();
+    s += vocVal;
     display.setFont(ArialMT_Plain_16);
     display.drawString(0, 11, s);
 
@@ -628,13 +627,15 @@ void addTime() {
 
 void loop() {
   ESP.wdtFeed();
+  Serial.println("ESP.wdtfeed done");
   pmSerial.enableRx(true);
   co2Serial.enableRx(false);
   digitalWrite(LED, LOW);
   pmSerial.flush();
   //pmSerial.write(PMstartup, 7);
   delay(750);
-  readVOC();
+  Serial.println("Reading VOC");
+  Serial.println("VOC Read");
   wdt_reset();
   if (pmSerial.find(0x42))
   {
