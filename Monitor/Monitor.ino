@@ -81,6 +81,7 @@ bool baselineLoaded = false;
 byte eeprom0, eeprom1, eeprom4, eeprom5;
 unsigned int eeprom2, eeprom3;
 unsigned int result;
+String VOClevels;
 
 int vocLevels = -1;
 int vocCO2 = -1;
@@ -425,8 +426,7 @@ void displayInfo() {
   }
   else if (vocConnected && displayCount == 2) {
     s = "VOCs: ";
-    String vocVal = readVOC();
-    s += vocVal;
+    s += VOClevels;
     display.setFont(ArialMT_Plain_16);
     display.drawString(0, 11, s);
 
@@ -553,19 +553,18 @@ void readLight()
   lux = light_sensor.calculateLux(full, ir);
 }
 
-String readVOC() {
+void readVOC() {
   unsigned int memval4 = EEPROM.get(4, eeprom4);
   unsigned int memval5 = EEPROM.get(5, eeprom5);
   unsigned int currentTime = memval4 * 256 + memval5;
   bool vocTime = millis() > vocWarmup;
   bool burnInTime = currentTime > vocBurnin;
   if (!baselineAvailable && !burnInTime) {
-    return (String)((int)currentTime / burnInTime) + "% Burn";
+    VOClevels =  (String)(millis() * 100/ burnInTime) + "% Burn";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
-
   if (!baselineAvailable && burnInTime) {
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom3) << 8 & 0xFFFF | EEPROM.get(3, eeprom4));
     result = vocSensor.getBaseline();
@@ -579,19 +578,23 @@ String readVOC() {
     if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
       baselineLoaded = true;
       Serial.println("Baseline loaded");
+      VOClevels =  "BOOTING";
     }
-    else baselineLoaded = false;
+    else {
+     baselineLoaded = false;
+     VOClevels = "ERROR";
+    }
   }
 
   if (baselineAvailable && !baselineLoaded) {
-    return "ERROR";
+    VOClevels =  "ERROR";
     baselineAvailable = false;
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
   if (baselineAvailable && baselineLoaded && !vocTime) {
-    return "WARMUP";
+    VOClevels =  (String)(millis() * 100 / vocWarmup) + "% Warm";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
@@ -601,7 +604,7 @@ String readVOC() {
       vocSensor.readAlgorithmResults();
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
-      return (String)vocTVOC;
+      VOClevels =  (String)vocTVOC;
     }
   }
 }
@@ -627,15 +630,13 @@ void addTime() {
 
 void loop() {
   ESP.wdtFeed();
-  Serial.println("ESP.wdtfeed done");
   pmSerial.enableRx(true);
   co2Serial.enableRx(false);
   digitalWrite(LED, LOW);
   pmSerial.flush();
   //pmSerial.write(PMstartup, 7);
   delay(750);
-  Serial.println("Reading VOC");
-  Serial.println("VOC Read");
+  readVOC();
   wdt_reset();
   if (pmSerial.find(0x42))
   {
@@ -671,8 +672,6 @@ void loop() {
   }
   if (activeConnection)uploadData();
   wdt_reset();
-  //makeWebpage();
-  //makeJSON();
   delay(1000);
   wdt_reset();
   digitalWrite(LED, LOW);
