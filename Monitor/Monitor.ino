@@ -560,13 +560,13 @@ void readVOC() {
   bool vocTime = millis() > vocWarmup;
   bool burnInTime = currentTime > vocBurnin;
   if (!baselineAvailable && !burnInTime) {
-    VOClevels =  (String)(millis() * 100/ burnInTime) + "% Burn";
+    VOClevels =  (String)(currentTime * 100 / vocBurnin) + "% Burn";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
-  if (!baselineAvailable && burnInTime) {
-    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom3) << 8 & 0xFFFF | EEPROM.get(3, eeprom4));
+  else if (!baselineAvailable && burnInTime) {
+    unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
     result = vocSensor.getBaseline();
     EEPROM.put(0, 0xA5);
     EEPROM.put(1, 0xB2);
@@ -586,20 +586,20 @@ void readVOC() {
     }
   }
 
-  if (baselineAvailable && !baselineLoaded) {
+  else if (baselineAvailable && !baselineLoaded) {
     VOClevels =  "ERROR";
     baselineAvailable = false;
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
-  if (baselineAvailable && baselineLoaded && !vocTime) {
+  else if (baselineAvailable && baselineLoaded && !vocTime) {
     VOClevels =  (String)(millis() * 100 / vocWarmup) + "% Warm";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
-  if (baselineAvailable && baselineLoaded && vocTime) {
+  else if (baselineAvailable && baselineLoaded && vocTime) {
     if (vocSensor.dataAvailable()) {
       vocSensor.readAlgorithmResults();
       vocCO2 = vocSensor.getCO2();
@@ -678,7 +678,7 @@ void loop() {
 
   h = dht.readHumidity();
   t = dht.readTemperature();
-  if ( !isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
+  !isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
   {
     temp = t;
     rh = h;
@@ -686,6 +686,8 @@ void loop() {
   }
   wdt_reset();
   displayInfo();
+  Serial.println("Info Displayed");
   addTime();
+  Serial.println("Time added");
   digitalWrite(LED, HIGH);
 }
