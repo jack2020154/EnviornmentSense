@@ -88,11 +88,12 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-const char* location = "esp_10";
+const char* espId = "35";
+const char* location = "Proto1";
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
-const char* ssidAlt = "CISS_Visitors";
-const char* passwordAlt = "";
+const char* ssidAlt = "TP-Link288";
+const char* passwordAlt = "50308888HO";
 
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
@@ -470,6 +471,8 @@ void uploadData() {
       data += humidity;
       data += "&co2=";
       data += co2_avg2;
+      data += "&esp_id=";
+      data += espId;
       data += "&pm25=";
       data += correctedPM25;
       data += "&pm10=";
@@ -678,7 +681,7 @@ void loop() {
 
   h = dht.readHumidity();
   t = dht.readTemperature();
-  !isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
+  if ( !isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
   {
     temp = t;
     rh = h;
