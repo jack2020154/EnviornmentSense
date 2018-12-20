@@ -88,12 +88,15 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-const char* espId = "35";
-const char* location = "Proto1";
+
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
-const char* ssidAlt = "TP-Link288";
-const char* passwordAlt = "50308888HO";
+const char* ssidAlt = "Home";
+const char* passwordAlt = "7809882089";
+
+const String espID = "42";
+const String getUrl = "http://192.168.1.42/getData.php?espVal=";
+String location;
 
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
@@ -130,7 +133,6 @@ static char correctedPM25[7];
 static String IP, data;
 
 static long lastTime = millis();
-static byte LED = 16;                 //D0 (GPIO 16)
 
 
 AsyncWebServer server(80);
@@ -153,14 +155,13 @@ void setup() {
 
   display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
   display.setFont(ArialMT_Plain_16);
-  display.drawString(64, 40, location);
+  display.drawString(64, 40, "Connecting...");
   display.display();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
   Serial.begin(115200);
   pmSerial.begin(9600);
   co2Serial.begin(9600);
-  pinMode(LED, OUTPUT);
 
   EEPROM.begin(512);
   CCS811Core::status returnCode = vocSensor.begin();
@@ -227,6 +228,20 @@ void setup() {
       Serial.print("IP Address: ");
       IP = ipToString( WiFi.localIP() );
       Serial.println( IP );
+      HTTPClient getClient;
+      getClient.begin(getUrl + espID);
+      Serial.print("Getting location from: ");
+      Serial.println(getUrl + espID);
+      int httpCode = getClient.GET();
+      if (httpCode > 0) {
+        Serial.println("Data received.");
+        location += getClient.getString();
+        display.clear();
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
+        display.drawString(64, 40, location);
+        display.display();
+      }
     }
     else if (!activeConnection) {
       WiFi.mode(WIFI_OFF);
@@ -263,6 +278,20 @@ void setup() {
         Serial.print("IP Address: ");
         IP = ipToString( WiFi.localIP() );
         Serial.println( IP );
+        HTTPClient getClient;
+        getClient.begin(getUrl + espID);
+        Serial.print("Getting location from: ");
+        Serial.println(getUrl + espID);
+        int httpCode = getClient.GET();
+        if (httpCode > 0) {
+          Serial.println("Data received.");
+          location += getClient.getString();
+          display.clear();
+          display.setTextAlignment(TEXT_ALIGN_CENTER);
+          display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
+          display.drawString(64, 40, location);
+          display.display();
+        }
       } else if (!activeConnection) {
         IP = "NO CONNECTION";
         Serial.println();
@@ -270,7 +299,7 @@ void setup() {
       }
     }
   }
-else if (!wifiConnection) IP = "TEST MODE";
+  else if (!wifiConnection) IP = "TEST MODE";
 }
 void calculatePM()
 {
@@ -374,6 +403,7 @@ void displayInfo() {
   Serial.println();
 
   display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
   String s = location;
   if (activeConnection) {
     s += " (";
@@ -472,7 +502,7 @@ void uploadData() {
       data += "&co2=";
       data += co2_avg2;
       data += "&esp_id=";
-      data += espId;
+      data += espID;
       data += "&pm25=";
       data += correctedPM25;
       data += "&pm10=";
@@ -514,8 +544,59 @@ void uploadData() {
         PostError++;
       }
       http.end();
+      HTTPClient getClient;
+      getClient.begin(getUrl + espID);
+      httpCode = getClient.GET();
+      if (httpCode >= 200 && httpCode < 300) {
+        location = getClient.getString();
+      }
     } else {
       Serial.println("******************* WiFi DISCONNECTED!!******");
+      reConnect();
+    }
+  }
+}
+
+void reConnect() {
+  WiFi.mode(WIFI_OFF);
+  delay(1000);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  int i = 0;
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+    i++;
+    if (i > 20) {
+      activeConnection = false;
+      break;
+    }
+  }
+  if (!activeConnection) {
+    delay(1000);
+    WiFi.mode(WIFI_OFF);
+    delay(1000);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssidAlt, passwordAlt);
+    i = 0;
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      Serial.print(".");
+      i++;
+      if (i > 20) {
+        activeConnection = false;
+        break;
+      }
+    }
+  }
+  if (activeConnection) {
+    HTTPClient getClient;
+    getClient.begin(getUrl + espID);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      location = getClient.getString();
     }
   }
 }
@@ -584,8 +665,8 @@ void readVOC() {
       VOClevels =  "BOOTING";
     }
     else {
-     baselineLoaded = false;
-     VOClevels = "ERROR";
+      baselineLoaded = false;
+      VOClevels = "ERROR";
     }
   }
 
@@ -635,7 +716,6 @@ void loop() {
   ESP.wdtFeed();
   pmSerial.enableRx(true);
   co2Serial.enableRx(false);
-  digitalWrite(LED, LOW);
   pmSerial.flush();
   //pmSerial.write(PMstartup, 7);
   delay(750);
@@ -658,7 +738,6 @@ void loop() {
       return;  //bad data, start loop again
   }
   wdt_reset();
-  digitalWrite(LED, HIGH);
 
   pmSerial.enableRx(false);
   co2Serial.enableRx(true);
@@ -677,11 +756,12 @@ void loop() {
   wdt_reset();
   delay(1000);
   wdt_reset();
-  digitalWrite(LED, LOW);
 
   h = dht.readHumidity();
   t = dht.readTemperature();
-  if ( !isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
+
+  if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
+
   {
     temp = t;
     rh = h;
@@ -692,5 +772,4 @@ void loop() {
   Serial.println("Info Displayed");
   addTime();
   Serial.println("Time added");
-  digitalWrite(LED, HIGH);
 }
