@@ -528,6 +528,16 @@ void displayInfo() {
   Serial.print("CO2: ");
   Serial.print(co2);
   Serial.println(" ppm");
+
+  Serial.print("pm25a correction: ");
+  Serial.println(a_pm25);
+
+  Serial.print("pm25B correction: ");
+  Serial.println(b_pm25);
+
+  Serial.print("pm25C correction: ");
+  Serial.println(c_pm25);
+
   Serial.print("AQI: ");
   aqi = convert2AQI( pm25_corrected );
   Serial.println( aqi );
