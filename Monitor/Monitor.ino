@@ -16,9 +16,9 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V0.8
-//*Author：Joel Klammer
-//*Date：May 11, 2018
+//*Version：V1.1
+//*Author：Joel Klammer, Jack Wang, Nicholas Ho
+//*Date：Jan 7, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
@@ -32,8 +32,11 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <FS.h>
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+
+//commented out for faster compile times
+//#include <ESPAsyncTCP.h>
+//#include <ESPAsyncWebServer.h> 
+
 #include <DHT.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -89,14 +92,35 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
-const char* ssidAlt = "Home";
-const char* passwordAlt = "7809882089";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
+const char* ssidAlt = "TP-Link288";
+const char* passwordAlt = "50308888HO";
 
-const String espID = "42";
-const String getUrl = "http://192.168.1.42/getData.php?espVal=";
+const String espID = "44";
+
+//The Url to get the Location designated
+const String getLocationUrl = "http://sms.concordiashanghai.org/bdst/get_location.php?esp_id=";
 String location;
+
+//The Url to get the PM25A designated
+const String getPM25aUrl = "http://sms.concordiashanghai.org/bdst/get_pm25a.php?esp_id=";
+
+//The Url to get the PM25B designated
+const String getPM25bUrl = "http://sms.concordiashanghai.org/bdst/get_pm25b.php?esp_id=";
+
+//The Url to get the PM25C designated
+const String getPM25cUrl = "http://sms.concordiashanghai.org/bdst/get_pm25c.php?esp_id=";
+
+//Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
+//const static double a_pm25 = 0.0061;
+//const static double b_pm25 = 0.0692;
+//const static double c_pm25 = 1.6286;
+
+static double a_pm25;
+static double b_pm25;
+static double c_pm25;
+
 
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
@@ -104,10 +128,7 @@ static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
-//Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
-const static double a_pm25 = 0.0061;
-const static double b_pm25 = 0.0692;
-const static double c_pm25 = 1.6286;
+
 
 static unsigned char ucRxBuf[50];
 static unsigned char ucCO2RxBuf[50];
@@ -135,8 +156,9 @@ static String IP, data;
 static long lastTime = millis();
 
 
-AsyncWebServer server(80);
-AsyncWebServer JSONserver(8080);
+//AsyncWebServer server(80);
+//AsyncWebServer JSONserver(8080);
+
 CCS811 vocSensor(CCS811_ADDR);
 
 void setup() {
@@ -228,19 +250,75 @@ void setup() {
       Serial.print("IP Address: ");
       IP = ipToString( WiFi.localIP() );
       Serial.println( IP );
+
+      /*
       HTTPClient getClient;
-      getClient.begin(getUrl + espID);
+      getClient.begin(getLocationUrl + espID);
       Serial.print("Getting location from: ");
-      Serial.println(getUrl + espID);
+      Serial.println(getLocationUrl + espID);
       int httpCode = getClient.GET();
-      if (httpCode > 0) {
-        Serial.println("Data received.");
-        location += getClient.getString();
+      */
+
+      //function added getUrlData which is a simple httpget request to a specific page 
+      location = getUrlData(getLocationUrl, espID);
+
+      if (location) {
+          Serial.println("Location received.");
+          Serial.println(location);
+
+          
+          int calibrationCounter = 0;
+          a_pm25 = getUrlData(getPM25aUrl, espID).toFloat();
+          if(a_pm25){
+          Serial.println("PM25A value received.");
+          Serial.println(a_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25a value.");
+
+          }
+          b_pm25 = getUrlData(getPM25bUrl, espID).toFloat();
+          if(b_pm25){
+            Serial.println("PM25B value received.");
+            Serial.println(b_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25b value.");
+
+          }
+          c_pm25 = getUrlData(getPM25cUrl, espID).toFloat();
+          if(c_pm25){
+            Serial.println("PM25C value received.");
+            Serial.println(c_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25c value.");
+          }
+
+
+          
+          //location += getClient.getString();
+
+          if(calibrationCounter == 3){
+            
+          Serial.println("All values received");
+          display.clear();
+          display.setTextAlignment(TEXT_ALIGN_CENTER);
+          display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
+          display.drawString(64, 40, location);
+          display.display();
+          }
+          
+        /*
+         * older code
+        Serial.println("Location received.");
+        //location += getClient.getString();
         display.clear();
         display.setTextAlignment(TEXT_ALIGN_CENTER);
         display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
         display.drawString(64, 40, location);
         display.display();
+        */
       }
     }
     else if (!activeConnection) {
@@ -278,19 +356,61 @@ void setup() {
         Serial.print("IP Address: ");
         IP = ipToString( WiFi.localIP() );
         Serial.println( IP );
+        /*
         HTTPClient getClient;
-        getClient.begin(getUrl + espID);
+        getClient.begin(getLocationUrl + espID);
         Serial.print("Getting location from: ");
-        Serial.println(getUrl + espID);
+        Serial.println(getLocationUrl + espID);
         int httpCode = getClient.GET();
-        if (httpCode > 0) {
-          Serial.println("Data received.");
-          location += getClient.getString();
+        */
+        location = getUrlData(getLocationUrl, espID);
+        
+        if (location) {
+          Serial.println("Location received.");
+          Serial.println(location);
+
+          
+          int calibrationCounter = 0;
+          a_pm25 = getUrlData(getPM25aUrl, espID).toFloat();
+          if(a_pm25){
+          Serial.println("PM25A value received.");
+          Serial.println(a_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25a value.");
+
+          }
+          b_pm25 = getUrlData(getPM25bUrl, espID).toFloat();
+          if(b_pm25){
+            Serial.println("PM25B value received.");
+            Serial.println(b_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25b value.");
+
+          }
+          c_pm25 = getUrlData(getPM25cUrl, espID).toFloat();
+          if(c_pm25){
+            Serial.println("PM25C value received.");
+            Serial.println(c_pm25);
+            calibrationCounter++;
+          } else {
+            Serial.println("***Failed to get PM25c value.");
+          }
+
+
+          
+          //location += getClient.getString();
+
+          if(calibrationCounter == 3){
+            
+          Serial.println("All values received");
           display.clear();
           display.setTextAlignment(TEXT_ALIGN_CENTER);
           display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
           display.drawString(64, 40, location);
           display.display();
+          }
         }
       } else if (!activeConnection) {
         IP = "NO CONNECTION";
@@ -340,6 +460,24 @@ void calculatePM()
   }
   else
     Serial.print("#");
+}
+
+//Getting Location, PM25A, PM25B, PM25C from online php files
+String getUrlData(String getUrl, String espID){
+
+    HTTPClient http;  //Declare an object of class HTTPClient
+    //Serial.println(getUrl + espID);
+    http.begin(getUrl + espID);  //Specify request destination
+    int httpCode = http.GET();  //Send the request
+    if (httpCode > 0) { //Check the returning code
+      String payload = http.getString();  //Get the request response payload
+      return payload;
+      
+    } else {
+    Serial.println("Could not retrieve website data");
+    }
+    http.end();   //Close connection
+  
 }
 
 void readCO2(unsigned char ucData) {
@@ -486,7 +624,7 @@ void uploadData() {
     int lux_avg2 = (int)( ((double)lux_avg) / loopCnt + 0.5);
     if ( WiFi.status() == WL_CONNECTED ) {
       HTTPClient http;
-      http.begin("http://sms.concordiashanghai.org/bdst_insert.php"); //HTTP
+      http.begin("http://sms.concordiashanghai.org/bdst/sensor_upload_data.php?"); //HTTP
       //http.begin("iot.concordiashanghai.org", 80, "/data.php"); //HTTP
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       dtostrf(temp_avg2, 6, 2, temperature);
@@ -545,7 +683,7 @@ void uploadData() {
       }
       http.end();
       HTTPClient getClient;
-      getClient.begin(getUrl + espID);
+      getClient.begin(getLocationUrl + espID);
       httpCode = getClient.GET();
       if (httpCode >= 200 && httpCode < 300) {
         location = getClient.getString();
@@ -593,7 +731,7 @@ void reConnect() {
   }
   if (activeConnection) {
     HTTPClient getClient;
-    getClient.begin(getUrl + espID);
+    getClient.begin(getLocationUrl + espID);
     int httpCode = getClient.GET();
     if (httpCode >= 200 && httpCode < 300) {
       location = getClient.getString();
