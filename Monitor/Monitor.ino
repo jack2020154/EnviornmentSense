@@ -16,9 +16,9 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V0.8
+//*Version：V1.2
 //*Author：Joel Klammer
-//*Date：May 11, 2018
+//*Date：Jan 12, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
