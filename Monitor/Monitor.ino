@@ -16,9 +16,9 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V1.1
-//*Author：Joel Klammer, Jack Wang, Nicholas Ho
-//*Date：Jan 8, 2018
+//*Version：V0.8
+//*Author：Joel Klammer
+//*Date：May 11, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
@@ -31,12 +31,7 @@
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <FS.h>
-
-//commented out for faster compile times
-//#include <ESPAsyncTCP.h>
-//#include <ESPAsyncWebServer.h> 
-
+//#include <FS.h>
 #include <DHT.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -92,35 +87,16 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
-const char* ssidAlt = "TP-Link288";
-const char* passwordAlt = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
+const char* ssidAlt = "Home";
+const char* passwordAlt = "DONT STEAL MY PASSWORD";
 
-const String espID = "44";
-
-//The Url to get the Location designated
-const String getLocationUrl = "http://sms.concordiashanghai.org/bdst/get_location.php?esp_id=";
+const String espId = "42";
+const String dataUrl = "192.168.1.13"; //Just the IP address ex. 172.18.80.11
 String location;
-
-//The Url to get the PM25A designated
-const String getPM25aUrl = "http://sms.concordiashanghai.org/bdst/get_pm25a.php?esp_id=";
-
-//The Url to get the PM25B designated
-const String getPM25bUrl = "http://sms.concordiashanghai.org/bdst/get_pm25b.php?esp_id=";
-
-//The Url to get the PM25C designated
-const String getPM25cUrl = "http://sms.concordiashanghai.org/bdst/get_pm25c.php?esp_id=";
-
-//Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
-//const static double a_pm25 = 0.0061;
-//const static double b_pm25 = 0.0692;
-//const static double c_pm25 = 1.6286;
-
-static double a_pm25;
-static double b_pm25;
-static double c_pm25;
-
+String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
+String receivedData[7];
 
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
@@ -128,6 +104,11 @@ static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
+//Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
+static double a_pm25 = 0.0061;
+static double b_pm25 = 0.0692;
+static double c_pm25 = 1.6286;
+static double a_co2, b_co2, c_co2;
 
 
 static unsigned char ucRxBuf[50];
@@ -154,10 +135,6 @@ static char correctedPM25[7];
 static String IP, data;
 
 static long lastTime = millis();
-
-
-//AsyncWebServer server(80);
-//AsyncWebServer JSONserver(8080);
 
 CCS811 vocSensor(CCS811_ADDR);
 
@@ -186,6 +163,7 @@ void setup() {
   co2Serial.begin(9600);
 
   EEPROM.begin(512);
+  readCurves();
   CCS811Core::status returnCode = vocSensor.begin();
   if ((EEPROM.get(0, eeprom0) == 0xA5) && (EEPROM.get(1, eeprom1) == 0xB2)) {
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
@@ -250,75 +228,15 @@ void setup() {
       Serial.print("IP Address: ");
       IP = ipToString( WiFi.localIP() );
       Serial.println( IP );
-
-      /*
-      HTTPClient getClient;
-      getClient.begin(getLocationUrl + espID);
-      Serial.print("Getting location from: ");
-      Serial.println(getLocationUrl + espID);
-      int httpCode = getClient.GET();
-      */
-
-      //function added getUrlData which is a simple httpget request to a specific page 
-      location = getUrlData(getLocationUrl, espID);
-
-      if (location) {
-          Serial.println("Location received.");
-          Serial.println(location);
-
-          
-          int calibrationCounter = 0;
-          a_pm25 = getUrlData(getPM25aUrl, espID).toFloat();
-          if(a_pm25){
-          Serial.println("PM25A value received.");
-          Serial.println(a_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25a value.");
-
-          }
-          b_pm25 = getUrlData(getPM25bUrl, espID).toFloat();
-          if(b_pm25){
-            Serial.println("PM25B value received.");
-            Serial.println(b_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25b value.");
-
-          }
-          c_pm25 = getUrlData(getPM25cUrl, espID).toFloat();
-          if(c_pm25){
-            Serial.println("PM25C value received.");
-            Serial.println(c_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25c value.");
-          }
-
-
-          
-          //location += getClient.getString();
-
-          if(calibrationCounter == 3){
-            
-          Serial.println("All values received");
-          display.clear();
-          display.setTextAlignment(TEXT_ALIGN_CENTER);
-          display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
-          display.drawString(64, 40, location);
-          display.display();
-          }
-          
-        /*
-         * older code
-        Serial.println("Location received.");
-        //location += getClient.getString();
+      receiveData();
+      if (location  != "999") {
+        Serial.println("Data received.");
         display.clear();
         display.setTextAlignment(TEXT_ALIGN_CENTER);
         display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
         display.drawString(64, 40, location);
         display.display();
-        */
+        commitCurves();
       }
     }
     else if (!activeConnection) {
@@ -356,61 +274,15 @@ void setup() {
         Serial.print("IP Address: ");
         IP = ipToString( WiFi.localIP() );
         Serial.println( IP );
-        /*
-        HTTPClient getClient;
-        getClient.begin(getLocationUrl + espID);
-        Serial.print("Getting location from: ");
-        Serial.println(getLocationUrl + espID);
-        int httpCode = getClient.GET();
-        */
-        location = getUrlData(getLocationUrl, espID);
-        
-        if (location) {
-          Serial.println("Location received.");
-          Serial.println(location);
-
-          
-          int calibrationCounter = 0;
-          a_pm25 = getUrlData(getPM25aUrl, espID).toFloat();
-          if(a_pm25){
-          Serial.println("PM25A value received.");
-          Serial.println(a_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25a value.");
-
-          }
-          b_pm25 = getUrlData(getPM25bUrl, espID).toFloat();
-          if(b_pm25){
-            Serial.println("PM25B value received.");
-            Serial.println(b_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25b value.");
-
-          }
-          c_pm25 = getUrlData(getPM25cUrl, espID).toFloat();
-          if(c_pm25){
-            Serial.println("PM25C value received.");
-            Serial.println(c_pm25);
-            calibrationCounter++;
-          } else {
-            Serial.println("***Failed to get PM25c value.");
-          }
-
-
-          
-          //location += getClient.getString();
-
-          if(calibrationCounter == 3){
-            
-          Serial.println("All values received");
+        receiveData();
+        if (location != "999") {
+          Serial.println("Data received.");
           display.clear();
           display.setTextAlignment(TEXT_ALIGN_CENTER);
           display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
           display.drawString(64, 40, location);
           display.display();
-          }
+          commitCurves();
         }
       } else if (!activeConnection) {
         IP = "NO CONNECTION";
@@ -420,6 +292,7 @@ void setup() {
     }
   }
   else if (!wifiConnection) IP = "TEST MODE";
+  readCurves();
 }
 void calculatePM()
 {
@@ -462,24 +335,6 @@ void calculatePM()
     Serial.print("#");
 }
 
-//Getting Location, PM25A, PM25B, PM25C from online php files
-String getUrlData(String getUrl, String espID){
-
-    HTTPClient http;  //Declare an object of class HTTPClient
-    //Serial.println(getUrl + espID);
-    http.begin(getUrl + espID);  //Specify request destination
-    int httpCode = http.GET();  //Send the request
-    if (httpCode > 0) { //Check the returning code
-      String payload = http.getString();  //Get the request response payload
-      return payload;
-      
-    } else {
-    Serial.println("Could not retrieve website data");
-    }
-    http.end();   //Close connection
-  
-}
-
 void readCO2(unsigned char ucData) {
   unsigned int old_co2 = co2;
   ucCO2RxBuf[ucCO2RxCnt++] = ucData;
@@ -488,6 +343,8 @@ void readCO2(unsigned char ucData) {
   }
   if (ucCO2RxCnt > 11) {
     co2 = ucCO2RxBuf[4] * 256 + ucCO2RxBuf[5];
+    //Compute curve
+    co2 = a_co2 * co2 * co2 + b_co2 * co2 + c_co2;
     ucCO2RxCnt = 0;
   }
   if ( co2 < 350 ) {       //bad read
@@ -528,16 +385,6 @@ void displayInfo() {
   Serial.print("CO2: ");
   Serial.print(co2);
   Serial.println(" ppm");
-
-  Serial.print("pm25a correction: ");
-  Serial.println(a_pm25);
-
-  Serial.print("pm25B correction: ");
-  Serial.println(b_pm25);
-
-  Serial.print("pm25C correction: ");
-  Serial.println(c_pm25);
-
   Serial.print("AQI: ");
   aqi = convert2AQI( pm25_corrected );
   Serial.println( aqi );
@@ -634,7 +481,7 @@ void uploadData() {
     int lux_avg2 = (int)( ((double)lux_avg) / loopCnt + 0.5);
     if ( WiFi.status() == WL_CONNECTED ) {
       HTTPClient http;
-      http.begin("http://sms.concordiashanghai.org/bdst/sensor_upload_data.php?"); //HTTP
+      http.begin("http://sms.concordiashanghai.org/bdst_insert.php"); //HTTP
       //http.begin("iot.concordiashanghai.org", 80, "/data.php"); //HTTP
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       dtostrf(temp_avg2, 6, 2, temperature);
@@ -650,7 +497,7 @@ void uploadData() {
       data += "&co2=";
       data += co2_avg2;
       data += "&esp_id=";
-      data += espID;
+      data += espId;
       data += "&pm25=";
       data += correctedPM25;
       data += "&pm10=";
@@ -691,20 +538,13 @@ void uploadData() {
         Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
         PostError++;
       }
-      http.end();
-      HTTPClient getClient;
-      getClient.begin(getLocationUrl + espID);
-      httpCode = getClient.GET();
-      if (httpCode >= 200 && httpCode < 300) {
-        location = getClient.getString();
-      }
-    } else {
-      Serial.println("******************* WiFi DISCONNECTED!!******");
-      reConnect();
+      receiveData();
+      commitCurves();
+      readCurves();
+
     }
   }
 }
-
 void reConnect() {
   WiFi.mode(WIFI_OFF);
   delay(1000);
@@ -740,12 +580,7 @@ void reConnect() {
     }
   }
   if (activeConnection) {
-    HTTPClient getClient;
-    getClient.begin(getLocationUrl + espID);
-    int httpCode = getClient.GET();
-    if (httpCode >= 200 && httpCode < 300) {
-      location = getClient.getString();
-    }
+    readCurves();
   }
 }
 
@@ -857,6 +692,158 @@ void addTime() {
     EEPROM.put(4, (currentTime >> 8) & 0x00FF);
     EEPROM.put(5, currentTime & 0x00FF);
     EEPROM.commit();
+  }
+}
+
+void receiveData() {
+  for (int i = 0; i <= 6; i++) {
+    HTTPClient getClient;
+    String getURL = "http://" + dataUrl + "/" + phpPages[i] + ".php?espId=" + espId;
+    Serial.print("Getting data from: ");
+    Serial.println(getURL);
+    getClient.begin(getURL);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      receivedData[i] = getClient.getString();
+      Serial.print("Received Data: ");
+      Serial.println(receivedData[i]);
+    } else {
+      Serial.print("Error code ");
+      Serial.println(httpCode);
+      receivedData[i] = 999;
+    }
+  }
+  location = receivedData[0];
+  float a_pm25_temp = receivedData[1].toFloat();
+  float b_pm25_temp = receivedData[2].toFloat();
+  float c_pm25_temp = receivedData[3].toFloat();
+  float a_co2_temp = receivedData[4].toFloat();
+  float b_co2_temp = receivedData[5].toFloat();
+  float c_co2_temp = receivedData[6].toFloat();
+  //Ensures that invalid responses don't get written to memory
+  if ((int)a_pm25_temp != 999 && (int)b_pm25_temp != 999 && (int)c_pm25_temp != 999) {
+    a_pm25 = a_pm25_temp;
+    b_pm25 = b_pm25_temp;
+    c_pm25 = c_pm25_temp;
+    Serial.println("All PM2.5 values received, none invalid");
+  } else {
+    Serial.println("One or more PM2.5 values are invalid, nullifying");
+    reConnect();
+  }
+  if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
+    a_co2 = a_co2_temp;
+    b_co2 = b_co2_temp;
+    c_co2 = c_co2_temp;
+    Serial.println("All CO2 values received, none invalid");
+  } else  {
+    Serial.println("One or more CO2 values are invalid, nullifying");
+    reConnect();
+  }
+}
+
+void commitCurves() {
+  //probably a nightmare for memory allocation
+  int a_pm25_int = (int)a_pm25;
+  int a_pm25_d1 = ((int)((a_pm25 * 100)) % 100);
+  int a_pm25_d2 = ((int)(a_pm25 * 10000)) % 100;
+  int b_pm25_int = (int)b_pm25;
+  int b_pm25_d1 = ((int)((b_pm25 * 100)) % 100);
+  int b_pm25_d2 = ((int)(b_pm25 * 10000)) % 100;
+  int c_pm25_int = (int)c_pm25;
+  int c_pm25_d1 = ((int)((c_pm25 * 100)) % 100);
+  int c_pm25_d2 = ((int)(c_pm25 * 10000)) % 100;
+  int a_co2_int = (int)a_co2;
+  int a_co2_d1 = ((int)((a_co2 * 100)) % 100);
+  int a_co2_d2 = ((int)(a_co2 * 10000)) % 100;
+  int b_co2_int = (int)b_co2;
+  int b_co2_d1 = ((int)((b_co2 * 100)) % 100);
+  int b_co2_d2 = ((int)(b_co2 * 10000)) % 100;
+  int c_co2_int = (int)c_co2;
+  int c_co2_d1 = ((int)((c_co2 * 100)) % 100);
+  int c_co2_d2 = ((int)(c_co2 * 10000)) % 100;
+  EEPROM.put(6, a_pm25_int);
+  EEPROM.put(7, a_pm25_d1);
+  EEPROM.put(8, a_pm25_d2);
+  EEPROM.put(9, b_pm25_int);
+  EEPROM.put(10, b_pm25_d1);
+  EEPROM.put(11, b_pm25_d2);
+  EEPROM.put(12, c_pm25_int);
+  EEPROM.put(13, c_pm25_d1);
+  EEPROM.put(14, c_pm25_d2);
+  EEPROM.put(15, a_co2_int);
+  EEPROM.put(16, a_co2_d1);
+  EEPROM.put(17, a_co2_d2);
+  EEPROM.put(18, b_co2_int);
+  EEPROM.put(19, b_co2_d1);
+  EEPROM.put(20, b_co2_d2);
+  EEPROM.put(21, c_co2_int);
+  EEPROM.put(22, c_co2_d1);
+  EEPROM.put(23, c_co2_d2);
+  EEPROM.commit();
+}
+
+void readCurves() {
+  byte eepromRead;
+  unsigned int a_pm25_int_read = EEPROM.get(6, eepromRead);
+  unsigned int a_pm25_d1_read = EEPROM.get(7, eepromRead);
+  unsigned int a_pm25_d2_read = EEPROM.get(8, eepromRead);
+  unsigned int b_pm25_int_read = EEPROM.get(9, eepromRead);
+  unsigned int b_pm25_d1_read = EEPROM.get(10, eepromRead);
+  unsigned int b_pm25_d2_read = EEPROM.get(11, eepromRead);
+  unsigned int c_pm25_int_read = EEPROM.get(12, eepromRead);
+  unsigned int c_pm25_d1_read = EEPROM.get(13, eepromRead);
+  unsigned int c_pm25_d2_read = EEPROM.get(14, eepromRead);
+  unsigned int a_co2_int_read = EEPROM.get(15, eepromRead);
+  unsigned int a_co2_d1_read = EEPROM.get(16, eepromRead);
+  unsigned int a_co2_d2_read = EEPROM.get(17, eepromRead);
+  unsigned int b_co2_int_read = EEPROM.get(18, eepromRead);
+  unsigned int b_co2_d1_read = EEPROM.get(19, eepromRead);
+  unsigned int b_co2_d2_read = EEPROM.get(20, eepromRead);
+  unsigned int c_co2_int_read = EEPROM.get(21, eepromRead);
+  unsigned int c_co2_d1_read = EEPROM.get(22, eepromRead);
+  unsigned int c_co2_d2_read = EEPROM.get(23, eepromRead);
+  if (a_pm25_d1_read == 255 || b_pm25_d1_read == 255 || c_co2_d1_read == 255) {
+    Serial.println("Memory empty for PM2.5 calibration, using default curves");
+    a_pm25 = 0.0061;
+    b_pm25 = 0.0692;
+    c_pm25 = 1.6286;
+  } else {
+    a_pm25 = a_pm25_int_read + ((float)a_pm25_d1_read) / 100 + ((float)a_pm25_d2_read) / 10000;
+    b_pm25 = b_pm25_int_read + ((float)b_pm25_d1_read) / 100 + ((float)b_pm25_d2_read) / 10000;
+    c_pm25 = c_pm25_int_read + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000;
+    Serial.println("PM2.5 calibration read from eeprom");
+    Serial.print("a_pm25: ");
+    Serial.println(a_pm25);
+    Serial.print("b_pm25: ");
+    Serial.println(b_pm25);
+    Serial.print("c_pm25: ");
+    Serial.println(c_pm25);
+  }
+  if (a_co2_d1_read == 255 || b_co2_d1_read == 255 || c_co2_d1_read == 255) {
+    Serial.println("Memory empty for CO2 calibration, using default curves");
+    a_co2 = 0;
+    b_co2 = 1;
+    c_co2 = 0;
+  } else {
+    a_co2 = a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000;
+    b_co2 = b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000;
+    c_co2 = c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000;
+    Serial.println("CO2 calibration read from eeprom");
+    Serial.print("a_co2: ");
+    Serial.println(a_co2);
+    Serial.print("b_co2: ");
+    Serial.println(b_co2);
+    Serial.print("c_co2: ");
+    Serial.println(c_co2);
+  }
+}
+
+void readMemory() {
+  for (int i = 1; i <= 512; i++ ) {
+    byte eepromRead;
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(EEPROM.get(i, eepromRead));
   }
 }
 
