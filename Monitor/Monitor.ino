@@ -90,10 +90,10 @@ String macAddr;
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
 const char* ssidAlt = "Home";
-const char* passwordAlt = "DONT STEAL MY PASSWORD";
+const char* passwordAlt = "";
 
 const String espId = "42";
-const String dataUrl = "192.168.1.13"; //Just the IP address ex. 172.18.80.11
+const String dataUrl = "172.18.120.75"; //Just the IP address ex. 172.18.80.11
 String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
@@ -109,7 +109,7 @@ static double a_pm25 = 0.0061;
 static double b_pm25 = 0.0692;
 static double c_pm25 = 1.6286;
 static double a_co2, b_co2, c_co2;
-
+float a_pm25_temp, b_pm25_temp, c_pm25_temp, a_co2_temp, b_co2_temp, c_co2_temp;
 
 static unsigned char ucRxBuf[50];
 static unsigned char ucCO2RxBuf[50];
@@ -117,6 +117,7 @@ static unsigned char ucCO2RxCnt = 0, displayCount = 0, PostError = 0;
 
 static byte PMstartup[]  = {0x42, 0x4D, 0xE4, 0x00, 0x01, 0x01, 0x74};
 static byte CO2startup[] = {0x42, 0x4D, 0xE3, 0x00, 0x00, 0x01, 0x72};
+
 
 static unsigned int pm10_raw, pm25_raw, pm100_raw, pm10, pm25, pm100;
 static unsigned int part003, part005, part010, part025, part050, part100;
@@ -236,7 +237,6 @@ void setup() {
         display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
         display.drawString(64, 40, location);
         display.display();
-        commitCurves();
       }
     }
     else if (!activeConnection) {
@@ -282,7 +282,6 @@ void setup() {
           display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
           display.drawString(64, 40, location);
           display.display();
-          commitCurves();
         }
       } else if (!activeConnection) {
         IP = "NO CONNECTION";
@@ -343,6 +342,10 @@ void readCO2(unsigned char ucData) {
   }
   if (ucCO2RxCnt > 11) {
     co2 = ucCO2RxBuf[4] * 256 + ucCO2RxBuf[5];
+    Serial.print("Value at index 4 of CO2: ");
+    Serial.println(ucCO2RxBuf[4]);
+    Serial.print("Value at index 5 of CO2: ");
+    Serial.println(ucCO2RxBuf[5]);
     //Compute curve
     co2 = a_co2 * co2 * co2 + b_co2 * co2 + c_co2;
     ucCO2RxCnt = 0;
@@ -355,7 +358,8 @@ void readCO2(unsigned char ucData) {
 void displayInfo() {
 
   Serial.println("----------------------------------");
-
+  Serial.print("System clock: ");
+  Serial.println(millis());
   Serial.print("PM1.0 (STD) : ");
   Serial.print(pm10);
   Serial.println(" ug/m3");
@@ -481,7 +485,7 @@ void uploadData() {
     int lux_avg2 = (int)( ((double)lux_avg) / loopCnt + 0.5);
     if ( WiFi.status() == WL_CONNECTED ) {
       HTTPClient http;
-      http.begin("http://sms.concordiashanghai.org/bdst_insert.php"); //HTTP
+      http.begin("http://sms.concordiashanghai.org/bdst/sensor_upload_data.php"); //HTTP
       //http.begin("iot.concordiashanghai.org", 80, "/data.php"); //HTTP
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       dtostrf(temp_avg2, 6, 2, temperature);
@@ -539,8 +543,7 @@ void uploadData() {
         PostError++;
       }
       receiveData();
-      commitCurves();
-      readCurves();
+      eepromControl();
 
     }
   }
@@ -689,9 +692,12 @@ void addTime() {
     Serial.print(currentTime);
     Serial.println(" minutes");
     currentTime++;
-    EEPROM.put(4, (currentTime >> 8) & 0x00FF);
-    EEPROM.put(5, currentTime & 0x00FF);
-    EEPROM.commit();
+    if (currentTime <= 2880) {
+      Serial.println("48 hours not reached, updating EEPROM");
+      EEPROM.put(4, (currentTime >> 8) & 0x00FF);
+      EEPROM.put(5, currentTime & 0x00FF);
+      EEPROM.commit();
+    } else Serial.println("Burn in completed, no need to update");  
   }
 }
 
@@ -714,26 +720,36 @@ void receiveData() {
     }
   }
   location = receivedData[0];
-  float a_pm25_temp = receivedData[1].toFloat();
-  float b_pm25_temp = receivedData[2].toFloat();
-  float c_pm25_temp = receivedData[3].toFloat();
-  float a_co2_temp = receivedData[4].toFloat();
-  float b_co2_temp = receivedData[5].toFloat();
-  float c_co2_temp = receivedData[6].toFloat();
+  a_pm25_temp = receivedData[1].toFloat();
+  b_pm25_temp = receivedData[2].toFloat();
+  c_pm25_temp = receivedData[3].toFloat();
+  a_co2_temp = receivedData[4].toFloat();
+  b_co2_temp = receivedData[5].toFloat();
+  c_co2_temp = receivedData[6].toFloat();
   //Ensures that invalid responses don't get written to memory
   if ((int)a_pm25_temp != 999 && (int)b_pm25_temp != 999 && (int)c_pm25_temp != 999) {
-    a_pm25 = a_pm25_temp;
-    b_pm25 = b_pm25_temp;
-    c_pm25 = c_pm25_temp;
+    if(a_pm25_temp != a_pm25 || b_pm25_temp != b_pm25 || c_pm25_temp != c_pm25) {
+      Serial.println("Difference in server and current curves of PM25 detected, updating");
+      a_pm25 = a_pm25_temp;
+      b_pm25 = b_pm25_temp;
+      c_pm25 = c_pm25_temp;
+      commitPMCurves();
+    }
+    else Serial.println("No changes in curve values of PM25 detected, no action required");
     Serial.println("All PM2.5 values received, none invalid");
   } else {
     Serial.println("One or more PM2.5 values are invalid, nullifying");
     reConnect();
   }
   if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
-    a_co2 = a_co2_temp;
-    b_co2 = b_co2_temp;
-    c_co2 = c_co2_temp;
+    if(a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
+      Serial.println("Difference in server and current curves of CO2 detected, updating");
+      a_co2 = a_co2_temp;
+      b_co2 = b_co2_temp;
+      c_co2 = c_co2_temp;
+      commitCo2Curves();
+    }
+    else Serial.println("No changes in curve values of CO2 detected, no action required");
     Serial.println("All CO2 values received, none invalid");
   } else  {
     Serial.println("One or more CO2 values are invalid, nullifying");
@@ -741,7 +757,7 @@ void receiveData() {
   }
 }
 
-void commitCurves() {
+void commitPMCurves() {
   //probably a nightmare for memory allocation
   int a_pm25_int = (int)a_pm25;
   int a_pm25_d1 = ((int)((a_pm25 * 100)) % 100);
@@ -752,15 +768,6 @@ void commitCurves() {
   int c_pm25_int = (int)c_pm25;
   int c_pm25_d1 = ((int)((c_pm25 * 100)) % 100);
   int c_pm25_d2 = ((int)(c_pm25 * 10000)) % 100;
-  int a_co2_int = (int)a_co2;
-  int a_co2_d1 = ((int)((a_co2 * 100)) % 100);
-  int a_co2_d2 = ((int)(a_co2 * 10000)) % 100;
-  int b_co2_int = (int)b_co2;
-  int b_co2_d1 = ((int)((b_co2 * 100)) % 100);
-  int b_co2_d2 = ((int)(b_co2 * 10000)) % 100;
-  int c_co2_int = (int)c_co2;
-  int c_co2_d1 = ((int)((c_co2 * 100)) % 100);
-  int c_co2_d2 = ((int)(c_co2 * 10000)) % 100;
   EEPROM.put(6, a_pm25_int);
   EEPROM.put(7, a_pm25_d1);
   EEPROM.put(8, a_pm25_d2);
@@ -770,6 +777,20 @@ void commitCurves() {
   EEPROM.put(12, c_pm25_int);
   EEPROM.put(13, c_pm25_d1);
   EEPROM.put(14, c_pm25_d2);
+  EEPROM.commit();
+  Serial.println("PM curves commited");
+}
+
+void commitCo2Curves () {
+  int a_co2_int = (int)a_co2;
+  int a_co2_d1 = ((int)((a_co2 * 100)) % 100);
+  int a_co2_d2 = ((int)(a_co2 * 10000)) % 100;
+  int b_co2_int = (int)b_co2;
+  int b_co2_d1 = ((int)((b_co2 * 100)) % 100);
+  int b_co2_d2 = ((int)(b_co2 * 10000)) % 100;
+  int c_co2_int = (int)c_co2;
+  int c_co2_d1 = ((int)((c_co2 * 100)) % 100);
+  int c_co2_d2 = ((int)(c_co2 * 10000)) % 100;
   EEPROM.put(15, a_co2_int);
   EEPROM.put(16, a_co2_d1);
   EEPROM.put(17, a_co2_d2);
@@ -780,6 +801,7 @@ void commitCurves() {
   EEPROM.put(22, c_co2_d1);
   EEPROM.put(23, c_co2_d2);
   EEPROM.commit();
+  Serial.println("CO2 curves committed");
 }
 
 void readCurves() {
@@ -813,11 +835,11 @@ void readCurves() {
     c_pm25 = c_pm25_int_read + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000;
     Serial.println("PM2.5 calibration read from eeprom");
     Serial.print("a_pm25: ");
-    Serial.println(a_pm25);
+    Serial.println(a_pm25, 4);
     Serial.print("b_pm25: ");
-    Serial.println(b_pm25);
+    Serial.println(b_pm25, 4);
     Serial.print("c_pm25: ");
-    Serial.println(c_pm25);
+    Serial.println(c_pm25, 4);
   }
   if (a_co2_d1_read == 255 || b_co2_d1_read == 255 || c_co2_d1_read == 255) {
     Serial.println("Memory empty for CO2 calibration, using default curves");
@@ -830,11 +852,11 @@ void readCurves() {
     c_co2 = c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000;
     Serial.println("CO2 calibration read from eeprom");
     Serial.print("a_co2: ");
-    Serial.println(a_co2);
+    Serial.println(a_co2, 4);
     Serial.print("b_co2: ");
-    Serial.println(b_co2);
+    Serial.println(b_co2, 4);
     Serial.print("c_co2: ");
-    Serial.println(c_co2);
+    Serial.println(c_co2, 4);
   }
 }
 
@@ -845,6 +867,10 @@ void readMemory() {
     Serial.print(": ");
     Serial.println(EEPROM.get(i, eepromRead));
   }
+}
+
+void eepromControl() {
+  
 }
 
 void loop() {
