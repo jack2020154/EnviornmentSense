@@ -1,5 +1,5 @@
 //******************************
-//
+//jan26
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
 //*PM SET pin = 1, the module works in continuous sampling mode, it will upload the sample data after the end of each sampling. (The sampling response time is 1s)
@@ -92,13 +92,13 @@ const char* password = "";
 const char* ssidAlt = "Home";
 const char* passwordAlt = "";
 
-const String espId = "42";
-const String dataUrl = "172.18.120.75"; //Just the IP address ex. 172.18.80.11
+const String espId = "29";
+const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11
 String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
 
-static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
+static unsigned long uploadInterval = 1000 * 30;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
 static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
@@ -720,6 +720,7 @@ void receiveData() {
     }
   }
   location = receivedData[0];
+  location.trim();
   a_pm25_temp = receivedData[1].toFloat();
   b_pm25_temp = receivedData[2].toFloat();
   c_pm25_temp = receivedData[3].toFloat();
