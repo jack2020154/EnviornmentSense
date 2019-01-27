@@ -1,5 +1,5 @@
 //******************************
-//jan26
+//Version used for the CO2 Calibration on Jan27
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
 //*PM SET pin = 1, the module works in continuous sampling mode, it will upload the sample data after the end of each sampling. (The sampling response time is 1s)
@@ -17,7 +17,7 @@
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
 //*Version：V1.2
-//*Author：Joel Klammer
+//*Author：Joel Klammer, Jack W, Nick H
 //*Date：Jan 12, 2018
 //******************************
 //*****  Revision History  *****
@@ -69,6 +69,11 @@ CCS811Core::status errorStatus;
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
+//Change for each ESP upload
+const String espId = "29";
+const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11
+
+
 bool activeConnection = true;
 
 bool wifiConnection = true;
@@ -87,13 +92,11 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
-const char* ssidAlt = "Home";
-const char* passwordAlt = "";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
+const char* ssidAlt = "TP-Link288";
+const char* passwordAlt = "50308888HO";
 
-const String espId = "29";
-const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11
 String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
