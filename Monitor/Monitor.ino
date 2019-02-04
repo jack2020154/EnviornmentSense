@@ -1,4 +1,5 @@
 //******************************
+//live
 //Version used for the CO2 Calibration on Jan27
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
@@ -70,7 +71,7 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "29";
+const String espId = "11";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11
 
 
@@ -101,7 +102,7 @@ String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
 
-static unsigned long uploadInterval = 1000 * 30;//ms between uploads
+static unsigned long uploadInterval = 1000 * 20;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
 static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
@@ -631,7 +632,8 @@ void readVOC() {
   unsigned int memval5 = EEPROM.get(5, eeprom5);
   unsigned int currentTime = memval4 * 256 + memval5;
   bool vocTime = millis() > vocWarmup;
-  bool burnInTime = currentTime > vocBurnin;
+  //readVOC change
+  bool burnInTime = currentTime >= vocBurnin;
   if (!baselineAvailable && !burnInTime) {
     VOClevels =  (String)(currentTime * 100 / vocBurnin) + "% Burn";
     vocSensor.readAlgorithmResults();
@@ -639,6 +641,7 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (!baselineAvailable && burnInTime) {
+    Serial.println("baseline not availabible but burnintime is.");
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
     result = vocSensor.getBaseline();
     EEPROM.put(0, 0xA5);
@@ -654,6 +657,7 @@ void readVOC() {
       VOClevels =  "BOOTING";
     }
     else {
+      Serial.println("No Baseline loaded");
       baselineLoaded = false;
       VOClevels = "ERROR";
     }
@@ -683,7 +687,7 @@ void readVOC() {
 }
 
 void addTime() {
-  if (millis() % 60000 < 2000 ) {
+  if (millis() % 60000 < 3700 ) {
     unsigned int memval4 = EEPROM.get(4, eeprom4);
     unsigned int memval5 = EEPROM.get(5, eeprom5);
     unsigned int currentTime = memval4 * 256 + memval5;
