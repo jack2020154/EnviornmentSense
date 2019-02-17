@@ -71,8 +71,8 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "11";
-const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11
+const String espId = "36";
+const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 
 
 bool activeConnection = true;
@@ -95,14 +95,14 @@ String macAddr;
 
 const char* ssid = "TP-Link288";
 const char* password = "50308888HO";
-const char* ssidAlt = "TP-Link288";
-const char* passwordAlt = "50308888HO";
+const char* ssidAlt = "CISS_Employees_Students";
+const char* passwordAlt = "";
 
 String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
 
-static unsigned long uploadInterval = 1000 * 20;//ms between uploads
+static unsigned long uploadInterval = 1000 * 60* 5;//ms between uploads
 static unsigned long vocWarmup = 1000 * 60 * 20;
 static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
@@ -297,6 +297,10 @@ void setup() {
   else if (!wifiConnection) IP = "TEST MODE";
   readCurves();
 }
+
+
+
+
 void calculatePM()
 {
   unsigned short sum = 0;
@@ -325,14 +329,35 @@ void calculatePM()
 
     pm25_corrected = a_pm25 * pm25 * pm25 + b_pm25 * pm25 + c_pm25;
 
+Serial.print("co2 sum: ");
+Serial.println(co2_avg);
+Serial.print("co2 value: ");
+Serial.println(co2);
+
+Serial.print("Loop count: ");
+Serial.println(loopCnt);   
+
+if(loopCnt > 0){
+  Serial.print("co2 Delta: ");
+  Serial.println(abs((co2_avg/loopCnt - co2)));
+}
+
+
+    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 1500){ //only adding viable data to the average
     loopCnt++;      //do averages
-    pm10_avg += pm10;
     pm25_avg += pm25_corrected;
+    pm10_avg += pm10;
     pm100_avg += pm100;
     temp_avg += temp;
     rh_avg += rh;
     co2_avg += co2;
     lux_avg += int(lux + 0.5);
+       Serial.println("Data is viable");
+    } else {
+      Serial.println("Data wasn't viable");
+    }
+
+  
   }
   else
     Serial.print("#");
@@ -490,6 +515,7 @@ void uploadData() {
     if ( WiFi.status() == WL_CONNECTED ) {
       HTTPClient http;
       http.begin("http://sms.concordiashanghai.org/bdst/sensor_upload_data.php"); //HTTP
+      //http://sms.concordiashanghai.org/bdst/sensor_upload_data.php
       //http.begin("iot.concordiashanghai.org", 80, "/data.php"); //HTTP
       http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       dtostrf(temp_avg2, 6, 2, temperature);
