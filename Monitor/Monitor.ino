@@ -792,7 +792,10 @@ void receiveData() {
 }
 
 void commitPMCurves() {
-  //probably a nightmare for memory allocation
+  int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
+  if (a_pm25 < 0) a_pm25_sig = 1;
+  if (b_pm25 < 0) b_pm25_sig = 1;
+  if (c_pm25 < 0) c_pm25_sig = 1;
   int a_pm25_int = (int)a_pm25;
   int a_pm25_d1 = ((int)((a_pm25 * 100)) % 100);
   int a_pm25_d2 = ((int)(a_pm25 * 10000)) % 100;
@@ -811,11 +814,19 @@ void commitPMCurves() {
   EEPROM.put(12, c_pm25_int);
   EEPROM.put(13, c_pm25_d1);
   EEPROM.put(14, c_pm25_d2);
+
+  EEPROM.put(24, a_pm25_sig);
+  EEPROM.put(25, b_pm25_sig);
+  EEPROM.put(26, c_pm25_sig);
   EEPROM.commit();
   Serial.println("PM curves commited");
 }
 
 void commitCo2Curves () {
+  int a_co2_sig = 2, b_co2_sig = 2, c_co2_sig = 2;
+  if (a_co2 < 0) a_co2_sig = 1;
+  if (b_co2 < 0) b_co2_sig = 1;
+  if (c_co2 < 0) c_co2_sig = 1;
   int a_co2_int = (int)a_co2;
   int a_co2_d1 = ((int)((a_co2 * 100)) % 100);
   int a_co2_d2 = ((int)(a_co2 * 10000)) % 100;
@@ -834,6 +845,10 @@ void commitCo2Curves () {
   EEPROM.put(21, c_co2_int);
   EEPROM.put(22, c_co2_d1);
   EEPROM.put(23, c_co2_d2);
+
+  EEPROM.put(27, a_co2_sig);
+  EEPROM.put(28, b_co2_sig);
+  EEPROM.put(29, c_co2_sig);
   EEPROM.commit();
   Serial.println("CO2 curves committed");
 }
@@ -858,6 +873,12 @@ void readCurves() {
   unsigned int c_co2_int_read = EEPROM.get(21, eepromRead);
   unsigned int c_co2_d1_read = EEPROM.get(22, eepromRead);
   unsigned int c_co2_d2_read = EEPROM.get(23, eepromRead);
+  unsigned int a_pm25_sig_read = EEPROM.get(24, eepromRead);
+  unsigned int b_pm25_sig_read = EEPROM.get(25, eepromRead);
+  unsigned int c_pm25_sig_read = EEPROM.get(26, eepromRead);
+  unsigned int a_co2_sig_read = EEPROM.get(27, eepromRead);
+  unsigned int b_co2_sig_read = EEPROM.get(28, eepromRead);
+  unsigned int c_co2_sig_read = EEPROM.get(29, eepromRead);
   if (a_pm25_d1_read == 255 || b_pm25_d1_read == 255 || c_co2_d1_read == 255) {
     Serial.println("Memory empty for PM2.5 calibration, using default curves");
     a_pm25 = 0.0061;
@@ -881,9 +902,9 @@ void readCurves() {
     b_co2 = 1;
     c_co2 = 0;
   } else {
-    a_co2 = a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000;
-    b_co2 = b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000;
-    c_co2 = c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000;
+    a_co2 = (a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000) * (-1) * a_co2_sig_read;
+    b_co2 = (b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000) * (-1) * b_co2_sig_read;
+    c_co2 = (c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000) * (-1) * c_co2_sig_read;
     Serial.println("CO2 calibration read from eeprom");
     Serial.print("a_co2: ");
     Serial.println(a_co2, 4);
