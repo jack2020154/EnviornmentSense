@@ -1,6 +1,6 @@
 //******************************
-//live
-//Version used for the CO2 Calibration on Jan27
+//Live Version
+//Version used for the CO2 Calibration on Jan27, Feb 1, Feb 17
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
 //*PM SET pin = 1, the module works in continuous sampling mode, it will upload the sample data after the end of each sampling. (The sampling response time is 1s)
@@ -17,12 +17,14 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V1.2
+//*Version：V1.9
 //*Author：Joel Klammer, Jack W, Nick H
-//*Date：Jan 12, 2018
+//*Date：Feb 20, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
+// v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
+//the correction curves so after an update the curves work.  
 // v0.9 Eliminated local wifi router - changed WIFI_AP_STA to WIFI_STA due to library updates
 // v0.8 Added JSON page at port 8080
 // v0.7 Added support for Light Sensor, switched SDA & SCL for Wire library
@@ -71,7 +73,7 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "36";
+const String espId = "22";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 
 
@@ -93,8 +95,8 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -343,7 +345,7 @@ if(loopCnt > 0){
 }
 
 
-    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 1500){ //only adding viable data to the average
+    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 2500 || co2 < 8000){ //a very light filter to the data
     loopCnt++;      //do averages
     pm25_avg += pm25_corrected;
     pm10_avg += pm10;
