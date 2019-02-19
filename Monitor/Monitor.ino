@@ -93,8 +93,8 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -573,8 +573,6 @@ void uploadData() {
         PostError++;
       }
       receiveData();
-      eepromControl();
-
     }
   }
 }
@@ -793,16 +791,31 @@ void receiveData() {
 
 void commitPMCurves() {
   int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
-  if (a_pm25 < 0) a_pm25_sig = 1;
-  if (b_pm25 < 0) b_pm25_sig = 1;
-  if (c_pm25 < 0) c_pm25_sig = 1;
-  int a_pm25_int = (int)a_pm25;
+  if (a_pm25 < 0) {
+    a_pm25_sig = 1;
+  }
+  if (b_pm25 < 0) {
+    b_pm25_sig = 1;
+  }
+  if (c_pm25 < 0) {
+    c_pm25_sig = 1;
+  }
+  Serial.print("apmsig: ");
+  Serial.println(a_pm25_sig);
+  Serial.print("bpmsig: ");
+  Serial.println(b_pm25_sig);
+  Serial.print("cpmsig: ");
+  Serial.println(b_pm25_sig);
+  int a_pm25_int = ((int)abs(a_pm25)) % 256;
+  int a_pm25_int2 = (abs(a_pm25) - a_pm25_int) / 256;
   int a_pm25_d1 = ((int)((a_pm25 * 100)) % 100);
   int a_pm25_d2 = ((int)(a_pm25 * 10000)) % 100;
-  int b_pm25_int = (int)b_pm25;
+  int b_pm25_int = ((int)abs(b_pm25)) % 256;
+  int b_pm25_int2 = (abs(b_pm25) - b_pm25_int) / 256;
   int b_pm25_d1 = ((int)((b_pm25 * 100)) % 100);
   int b_pm25_d2 = ((int)(b_pm25 * 10000)) % 100;
-  int c_pm25_int = (int)c_pm25;
+  int c_pm25_int = ((int)abs(c_pm25)) % 256;
+  int c_pm25_int2 = (abs(c_pm25) - c_pm25_int) / 256;
   int c_pm25_d1 = ((int)((c_pm25 * 100)) % 100);
   int c_pm25_d2 = ((int)(c_pm25 * 10000)) % 100;
   EEPROM.put(6, a_pm25_int);
@@ -814,28 +827,46 @@ void commitPMCurves() {
   EEPROM.put(12, c_pm25_int);
   EEPROM.put(13, c_pm25_d1);
   EEPROM.put(14, c_pm25_d2);
-
   EEPROM.put(24, a_pm25_sig);
   EEPROM.put(25, b_pm25_sig);
   EEPROM.put(26, c_pm25_sig);
+  EEPROM.put(106, a_pm25_int2);
+  EEPROM.put(109, b_pm25_int2);
+  EEPROM.put(112, c_pm25_int2);
+  delay(2000);
   EEPROM.commit();
   Serial.println("PM curves commited");
 }
 
 void commitCo2Curves () {
   int a_co2_sig = 2, b_co2_sig = 2, c_co2_sig = 2;
-  if (a_co2 < 0) a_co2_sig = 1;
-  if (b_co2 < 0) b_co2_sig = 1;
-  if (c_co2 < 0) c_co2_sig = 1;
-  int a_co2_int = (int)a_co2;
-  int a_co2_d1 = ((int)((a_co2 * 100)) % 100);
-  int a_co2_d2 = ((int)(a_co2 * 10000)) % 100;
-  int b_co2_int = (int)b_co2;
-  int b_co2_d1 = ((int)((b_co2 * 100)) % 100);
-  int b_co2_d2 = ((int)(b_co2 * 10000)) % 100;
-  int c_co2_int = (int)c_co2;
-  int c_co2_d1 = ((int)((c_co2 * 100)) % 100);
-  int c_co2_d2 = ((int)(c_co2 * 10000)) % 100;
+  if (a_co2 < 0) {
+    a_co2_sig = 1;
+  }
+  if (b_co2 < 0) {
+    b_co2_sig = 1;
+  }
+  if (c_co2 < 0) {
+    c_co2_sig = 1;
+  }
+  Serial.print("aco2sig: ");
+  Serial.println(a_co2_sig);
+  Serial.print("bco2sig: ");
+  Serial.println(b_co2_sig);
+  Serial.print("cco2sig: ");
+  Serial.println(c_co2_sig);
+  int a_co2_int = ((int)abs(a_co2)) % 256;
+  int a_co2_int2 = (abs(a_co2) - a_co2_int) / 256;
+  int a_co2_d1 = ((int)((abs(a_co2) * 100)) % 100);
+  int a_co2_d2 = ((int)(abs(a_co2) * 10000)) % 100;
+  int b_co2_int = ((int)abs(b_co2)) % 256;
+  int b_co2_int2 = (abs(b_co2) - b_co2_int) / 256;
+  int b_co2_d1 = ((int)((abs(b_co2) * 100)) % 100);
+  int b_co2_d2 = ((int)(abs(b_co2) * 10000)) % 100;
+  int c_co2_int = ((int)abs(c_co2)) % 256;
+  int c_co2_int2 = (abs(c_co2) - c_co2_int) / 256;
+  int c_co2_d1 = ((int)((abs(c_co2) * 100)) % 100);
+  int c_co2_d2 = ((int)(abs(c_co2) * 10000)) % 100;
   EEPROM.put(15, a_co2_int);
   EEPROM.put(16, a_co2_d1);
   EEPROM.put(17, a_co2_d2);
@@ -845,10 +876,13 @@ void commitCo2Curves () {
   EEPROM.put(21, c_co2_int);
   EEPROM.put(22, c_co2_d1);
   EEPROM.put(23, c_co2_d2);
-
-  EEPROM.put(27, a_co2_sig);
-  EEPROM.put(28, b_co2_sig);
-  EEPROM.put(29, c_co2_sig);
+  EEPROM.put(30, a_co2_sig);
+  EEPROM.put(31, b_co2_sig);
+  EEPROM.put(32, c_co2_sig);
+  EEPROM.put(115, a_co2_int2);
+  EEPROM.put(118, b_co2_int2);
+  EEPROM.put(121, c_co2_int2);
+  delay(2000);
   EEPROM.commit();
   Serial.println("CO2 curves committed");
 }
@@ -876,18 +910,24 @@ void readCurves() {
   unsigned int a_pm25_sig_read = EEPROM.get(24, eepromRead);
   unsigned int b_pm25_sig_read = EEPROM.get(25, eepromRead);
   unsigned int c_pm25_sig_read = EEPROM.get(26, eepromRead);
-  unsigned int a_co2_sig_read = EEPROM.get(27, eepromRead);
-  unsigned int b_co2_sig_read = EEPROM.get(28, eepromRead);
-  unsigned int c_co2_sig_read = EEPROM.get(29, eepromRead);
+  unsigned int a_co2_sig_read = EEPROM.get(30, eepromRead);
+  unsigned int b_co2_sig_read = EEPROM.get(31, eepromRead);
+  unsigned int c_co2_sig_read = EEPROM.get(32, eepromRead);
+  unsigned int a_pm25_int2_read = EEPROM.get(106, eepromRead);
+  unsigned int b_pm25_int2_read = EEPROM.get(109, eepromRead);
+  unsigned int c_pm25_int2_read = EEPROM.get(112, eepromRead);
+  unsigned int a_co2_int2_read = EEPROM.get(115, eepromRead);
+  unsigned int b_co2_int2_read = EEPROM.get(118, eepromRead);
+  unsigned int c_co2_int2_read = EEPROM.get(121, eepromRead);
   if (a_pm25_d1_read == 255 || b_pm25_d1_read == 255 || c_co2_d1_read == 255) {
     Serial.println("Memory empty for PM2.5 calibration, using default curves");
     a_pm25 = 0.0061;
     b_pm25 = 0.0692;
     c_pm25 = 1.6286;
   } else {
-    a_pm25 = (a_pm25_int_read + ((float)a_pm25_d1_read) / 100 + ((float)a_pm25_d2_read) / 10000) * (-1) ^ a_pm25_sig_read;
-    b_pm25 = (b_pm25_int_read + ((float)b_pm25_d1_read) / 100 + ((float)b_pm25_d2_read) / 10000) * (-1) ^ b_pm25_sig_read;
-    c_pm25 = (c_pm25_int_read + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000) * (-1) ^ c_pm25_sig_read;
+    a_pm25 = ((a_pm25_int_read + a_pm25_int2_read * 256) + ((float)a_pm25_d1_read) / 100 + ((float)a_pm25_d2_read) / 10000) * pow(-1, a_pm25_sig_read);
+    b_pm25 = ((b_pm25_int_read + b_pm25_int2_read * 256) + ((float)b_pm25_d1_read) / 100 + ((float)b_pm25_d2_read) / 10000) * pow(-1, b_pm25_sig_read);
+    c_pm25 = ((c_pm25_int_read + c_pm25_int2_read * 256) + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000) * pow(-1, c_pm25_sig_read);
     Serial.println("PM2.5 calibration read from eeprom");
     Serial.print("a_pm25: ");
     Serial.println(a_pm25, 4);
@@ -902,9 +942,9 @@ void readCurves() {
     b_co2 = 1;
     c_co2 = 0;
   } else {
-    a_co2 = (a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000) * (-1) ^ a_co2_sig_read;
-    b_co2 = (b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000) * (-1) ^ b_co2_sig_read;
-    c_co2 = (c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000) * (-1) ^ c_co2_sig_read;
+    a_co2 = ((a_co2_int_read + a_co2_int2_read * 256) + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000) * pow(-1, a_co2_sig_read);
+    b_co2 = ((b_co2_int_read + b_co2_int2_read * 256) + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000) * pow(-1, b_co2_sig_read);
+    c_co2 = ((c_co2_int_read + c_co2_int2_read * 256) + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000) * pow(-1, c_co2_sig_read);
     Serial.println("CO2 calibration read from eeprom");
     Serial.print("a_co2: ");
     Serial.println(a_co2, 4);
@@ -912,6 +952,14 @@ void readCurves() {
     Serial.println(b_co2, 4);
     Serial.print("c_co2: ");
     Serial.println(c_co2, 4);
+  }
+  if (a_co2_sig_read == 0 || b_co2_sig_read == 0 || c_co2_sig_read == 0) {
+    Serial.println("CO2 sign byte invalid, rewriting.");
+    updateCo2Signature();
+  }
+  if(a_pm25_sig_read == 0 || b_pm25_sig_read == 0 || c_pm25_sig_read == 0) {
+    Serial.println("PM25 sign byte invalid, rewriting.");
+    updatePMSignature();
   }
 }
 
@@ -924,8 +972,42 @@ void readMemory() {
   }
 }
 
-void eepromControl() {
-  
+void updateCo2Signature() {
+  int a_co2_sig = 2, b_co2_sig = 2, c_co2_sig = 2;
+  if(a_co2 < 0) {
+    a_co2_sig = 1;
+  }
+  if(b_co2 < 0) {
+    b_co2_sig = 1;
+  }
+  if(c_co2 < 0) {
+    c_co2_sig = 1;
+  }
+  EEPROM.put(30, a_co2_sig);
+  EEPROM.put(31, b_co2_sig);
+  EEPROM.put(32, c_co2_sig);
+  delay(1000);
+  EEPROM.commit();
+  Serial.println("Co2 Signatures Updated");
+}
+
+void updatePMSignature() {
+  int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
+  if(a_pm25 < 0) {
+    a_pm25_sig = 1;
+  }
+  if(b_pm25 < 0) {
+    b_pm25_sig = 1;
+  }
+  if(c_pm25 < 0) {
+    c_pm25_sig = 1;
+  }
+  EEPROM.put(24, a_pm25_sig);
+  EEPROM.put(25, b_pm25_sig);
+  EEPROM.put(26, c_pm25_sig);
+  delay(1000);
+  EEPROM.commit();
+  Serial.println("PM25 Signatures Updated");
 }
 
 void loop() {
