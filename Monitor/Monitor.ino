@@ -885,9 +885,9 @@ void readCurves() {
     b_pm25 = 0.0692;
     c_pm25 = 1.6286;
   } else {
-    a_pm25 = a_pm25_int_read + ((float)a_pm25_d1_read) / 100 + ((float)a_pm25_d2_read) / 10000;
-    b_pm25 = b_pm25_int_read + ((float)b_pm25_d1_read) / 100 + ((float)b_pm25_d2_read) / 10000;
-    c_pm25 = c_pm25_int_read + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000;
+    a_pm25 = (a_pm25_int_read + ((float)a_pm25_d1_read) / 100 + ((float)a_pm25_d2_read) / 10000) * (-1) ^ a_pm25_sig_read;
+    b_pm25 = (b_pm25_int_read + ((float)b_pm25_d1_read) / 100 + ((float)b_pm25_d2_read) / 10000) * (-1) ^ b_pm25_sig_read;
+    c_pm25 = (c_pm25_int_read + ((float)c_pm25_d1_read) / 100 + ((float)c_pm25_d2_read) / 10000) * (-1) ^ c_pm25_sig_read;
     Serial.println("PM2.5 calibration read from eeprom");
     Serial.print("a_pm25: ");
     Serial.println(a_pm25, 4);
@@ -902,9 +902,9 @@ void readCurves() {
     b_co2 = 1;
     c_co2 = 0;
   } else {
-    a_co2 = (a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000) * (-1) * a_co2_sig_read;
-    b_co2 = (b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000) * (-1) * b_co2_sig_read;
-    c_co2 = (c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000) * (-1) * c_co2_sig_read;
+    a_co2 = (a_co2_int_read + ((float)a_co2_d1_read) / 100 + ((float)a_co2_d2_read) / 10000) * (-1) ^ a_co2_sig_read;
+    b_co2 = (b_co2_int_read + ((float)b_co2_d1_read) / 100 + ((float)b_co2_d2_read) / 10000) * (-1) ^ b_co2_sig_read;
+    c_co2 = (c_co2_int_read + ((float)c_co2_d1_read) / 100 + ((float)c_co2_d2_read) / 10000) * (-1) ^ c_co2_sig_read;
     Serial.println("CO2 calibration read from eeprom");
     Serial.print("a_co2: ");
     Serial.println(a_co2, 4);
