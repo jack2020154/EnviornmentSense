@@ -95,8 +95,8 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -111,7 +111,7 @@ const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
 //Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
-static double a_pm25 = 0.0061;
+static double a_pm25 = 0.0060;
 static double b_pm25 = 0.0692;
 static double c_pm25 = 1.6286;
 static double a_co2, b_co2, c_co2;
@@ -334,18 +334,19 @@ void calculatePM()
 Serial.print("co2 sum: ");
 Serial.println(co2_avg);
 Serial.print("co2 value: ");
-Serial.println(co2);
+Serial.println(co2); 
 
 Serial.print("Loop count: ");
 Serial.println(loopCnt);   
-
+ 
 if(loopCnt > 0){
   Serial.print("co2 Delta: ");
   Serial.println(abs((co2_avg/loopCnt - co2)));
 }
 
 
-    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 2500 || co2 < 8000){ //a very light filter to the data
+if(co2 < 8000 && co2 != 0) { //preventing insanely high values from being entered in
+    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 2500){ //a very light filter to the data
     loopCnt++;      //do averages
     pm25_avg += pm25_corrected;
     pm10_avg += pm10;
@@ -358,7 +359,9 @@ if(loopCnt > 0){
     } else {
       Serial.println("Data wasn't viable");
     }
-
+} else {
+   Serial.println("Data from CO2 was too large or zero");
+}
   
   }
   else
