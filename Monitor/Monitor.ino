@@ -73,7 +73,7 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "22";
+const String espId = "41";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 
 
@@ -95,8 +95,8 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -346,7 +346,7 @@ if(loopCnt > 0){
 
 
 if(co2 < 8000 && co2 != 0) { //preventing insanely high values from being entered in
-    if((loopCnt < 5) || abs((co2_avg/loopCnt - co2)) < 2500){ //a very light filter to the data
+   
     loopCnt++;      //do averages
     pm25_avg += pm25_corrected;
     pm10_avg += pm10;
@@ -356,9 +356,6 @@ if(co2 < 8000 && co2 != 0) { //preventing insanely high values from being entere
     co2_avg += co2;
     lux_avg += int(lux + 0.5);
        Serial.println("Data is viable");
-    } else {
-      Serial.println("Data wasn't viable");
-    }
 } else {
    Serial.println("Data from CO2 was too large or zero");
 }
@@ -381,10 +378,10 @@ void readCO2(unsigned char ucData) {
     Serial.print("Value at index 5 of CO2: ");
     Serial.println(ucCO2RxBuf[5]);
     //Compute curve
-    co2 = a_co2 * co2 * co2 + b_co2 * co2 + c_co2;
+    co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 350 ) {       //bad read
+  if ( co2 < 100 ) {       //bad read
     co2 = old_co2;
   }
 }
