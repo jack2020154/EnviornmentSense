@@ -77,11 +77,14 @@ const String espId = "40";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 const String firmwareVers = "Version 1.9";
 
+//wifi connection, can be used to bypass the need to connect to wifi if false
 bool activeConnection = true;
 
 bool wifiConnection = true;
 
 bool vocConnected = true;
+
+//this pertains to the VOC baseline. As the ESP boots up these values are false until confirmed. 
 bool baselineAvailable = false;
 bool baselineLoaded = false;
 byte eeprom0, eeprom1, eeprom4, eeprom5;
@@ -89,29 +92,38 @@ unsigned int eeprom2, eeprom3;
 unsigned int result;
 String VOClevels;
 
+//default values for VOC
 int vocLevels = -1;
 int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-
+//Login credentials for the ESP. This will be moved to a more efficient/effective method later.
 const char* ssid = "CISS_Employees_Students";
 const char* password = "";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
+//The location that the sensor represents. Ex: H529
 String location;
+
+//The sensor will use HTTP GET to obtain a series of correction values. These are the names of the php files on the webserver
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
+//empty array to receive data
 String receivedData[7];
 
+//The upload interval for the sensor. The ESP will average the data obtained over this upload Interval and upload it.
 static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
+//The interval at which the sensor obtains the correction curve values. 
 static unsigned long receiveDataInterval = 1000 * 60 * 60;
+//How long is needed for the VOC to warm up
 static unsigned long vocWarmup = 1000 * 60 * 20;
 static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
 String webpage = "", JSON = "";
 
 //Correction to the PM2.5 sensor of the form: Corrected = a*Raw^2 + b*Raw + c
+//default correction values
 static double a_pm25 = 0.0060;
 static double b_pm25 = 0.0692;
 static double c_pm25 = 1.6286;
@@ -145,13 +157,15 @@ static String IP, data;
 static long lastTime = millis();
 static long lastTime_receive = millis();
 
-
+//address for VOC Sensor
 CCS811 vocSensor(CCS811_ADDR);
 
 void setup() {
   ESP.wdtDisable();
   ESP.wdtEnable(WDTO_8S);
+  //initializing temperature sensor
   dht.begin();
+  //initializing the light sensor
   light_sensor_found = light_sensor.begin();
   if (light_sensor_found)
   {
@@ -173,6 +187,7 @@ void setup() {
   co2Serial.begin(9600);
 
   EEPROM.begin(512);
+  //reads the correction curves from the webserver
   readCurves();
   CCS811Core::status returnCode = vocSensor.begin();
   if ((EEPROM.get(0, eeprom0) == 0xA5) && (EEPROM.get(1, eeprom1) == 0xB2)) {
@@ -384,7 +399,9 @@ void readCO2(unsigned char ucData) {
     co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 300 && loopCnt > 1 ) {       //bad read
+  if ( co2 < 200 && loopCnt > 1 ) {   
+    //bad read
+    Serial.print("bad CO2 read");
     co2 = old_co2;
   }
 }
