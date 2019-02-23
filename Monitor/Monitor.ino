@@ -73,9 +73,9 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "41";
+const String espId = "40";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-
+const String firmwareVers = "Version 1.9";
 
 bool activeConnection = true;
 
@@ -95,8 +95,8 @@ int vocTVOC = -1;
 String macAddr;
 
 
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -104,7 +104,8 @@ String location;
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 String receivedData[7];
 
-static unsigned long uploadInterval = 1000 * 60* 5;//ms between uploads
+static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
+static unsigned long receiveDataInterval = 1000 * 60 * 60;
 static unsigned long vocWarmup = 1000 * 60 * 20;
 static unsigned long vocBurnin = 48 * 60; // Time for VOC burnin, 2880 minutes
 const byte DNS_PORT = 53;
@@ -142,6 +143,8 @@ static char correctedPM25[7];
 static String IP, data;
 
 static long lastTime = millis();
+static long lastTime_receive = millis();
+
 
 CCS811 vocSensor(CCS811_ADDR);
 
@@ -161,7 +164,7 @@ void setup() {
 
   display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
   display.setFont(ArialMT_Plain_16);
-  display.drawString(64, 40, "Connecting...");
+  display.drawString(64, 40, firmwareVers);
   display.display();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
@@ -381,7 +384,7 @@ void readCO2(unsigned char ucData) {
     co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 100 ) {       //bad read
+  if ( co2 < 300 && loopCnt > 1 ) {       //bad read
     co2 = old_co2;
   }
 }
@@ -569,12 +572,20 @@ void uploadData() {
         lux_avg = 0;
         PostError = 0;
         lastTime = millis();
+        
+        //added by nick 
+        http.end();
 
       } else {
         Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
         PostError++;
       }
-      receiveData();
+      //only checking to receive data after an hour; 
+       if ( ( millis() - lastTime_receive ) > receiveDataInterval ) {
+        receiveData();
+        lastTime_receive = millis();
+       }
+      
     }
   }
 }
@@ -751,7 +762,9 @@ void receiveData() {
       Serial.println(httpCode);
       receivedData[i] = 999;
     }
+     getClient.end();
   }
+  
   location = receivedData[0];
   location.trim();
   a_pm25_temp = receivedData[1].toFloat();
@@ -789,6 +802,7 @@ void receiveData() {
     Serial.println("One or more CO2 values are invalid, nullifying");
     reConnect();
   }
+  
 }
 
 void commitPMCurves() {
@@ -1052,8 +1066,8 @@ void loop() {
   {
     readLight();
   }
-  if (activeConnection)uploadData();
-  wdt_reset();
+  if (activeConnection) uploadData();
+  //wdt_reset();
   delay(1000);
   wdt_reset();
 
@@ -1061,12 +1075,12 @@ void loop() {
   t = dht.readTemperature();
 
   if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
-
   {
     temp = t;
     rh = h;
     hIndex = dht.computeHeatIndex(t, h, false);  //calc heat index
   }
+  
   wdt_reset();
   displayInfo();
   Serial.println("Info Displayed");
