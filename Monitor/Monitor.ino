@@ -17,12 +17,28 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V1.9
+//*Version：V1.95
 //*Author：Joel Klammer, Jack W, Nick H
 //*Date：Feb 20, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
+
+//going to try
+//esp 2.2.0 + dht 1.1.1 (doesn't connect to wifi)
+//esp 2.3.0 + dht 1.1.1 X (failed)
+//esp 2.4.2 + no wifi connection (success) (memory leak doesnt appear with this)
+//esp 2.3.0 + wifi persistent + dht 1.1.1
+//esp 2.4.2 + wifi persistent + dht 1.1.1
+//esp 2.5.0 + jai's version of dht  
+// try VOC sensor? voc resets to -1 and doesnt warm up properly after that
+
+//attempt addaptive delay to restart the local loop
+//attempt to summon deconstructor 
+
+//possibly : wifi disconnection
+//knows: works well under certain wifi connection (?)
+
 // v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
 //the correction curves so after an update the curves work.  
 // v0.9 Eliminated local wifi router - changed WIFI_AP_STA to WIFI_STA due to library updates
@@ -31,6 +47,13 @@
 // v0.6 Added asynchronous webpage support, graphic welcome screen
 // v0.5
 
+//added this to hopefully solve the memory leak
+// no need for #include
+/*
+struct tcp_pcb;
+extern struct tcp_pcb* tcp_tw_pcbs;
+extern "C" void tcp_abort (struct tcp_pcb* pcb);
+*/
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -73,9 +96,19 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "40";
+const String espId = "10";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-const String firmwareVers = "Version 1.9";
+
+//displays firmware when first booting up so that the version is known.
+const String firmwareVers = "ACS 4";
+uint8_t bssidNICK[6] = {0x00, 0x5D, 0x73, 0x56, 0xC6, 0xED};
+//00:5D:73:56:C6:ED
+int wifiChannel = 48;
+
+
+//The delay Time
+static int delNum = 0;
+
 
 //wifi connection, can be used to bypass the need to connect to wifi if false
 bool activeConnection = true;
@@ -91,6 +124,9 @@ byte eeprom0, eeprom1, eeprom4, eeprom5;
 unsigned int eeprom2, eeprom3;
 unsigned int result;
 String VOClevels;
+
+//delays for the DHT sensor. chose 2100 because 2000 is right on the border for documentation for how long the DHT sensor should be given.
+int del = 2100;
 
 //default values for VOC
 int vocLevels = -1;
@@ -113,7 +149,7 @@ String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "
 String receivedData[7];
 
 //The upload interval for the sensor. The ESP will average the data obtained over this upload Interval and upload it.
-static unsigned long uploadInterval = 1000 * 60 * 5;//ms between uploads
+static unsigned long uploadInterval = 1000 * 15;//ms between uploads
 //The interval at which the sensor obtains the correction curve values. 
 static unsigned long receiveDataInterval = 1000 * 60 * 60;
 //How long is needed for the VOC to warm up
@@ -224,19 +260,24 @@ void setup() {
   if (wifiConnection) {
     WiFi.mode(WIFI_OFF);
     delay(1000);
+    WiFi.persistent( false );
     WiFi.mode(WIFI_STA);
     Serial.println();
     Serial.println();
     Serial.print("Connecting to ");
     Serial.println(ssid);
+    //WiFi.persistent(false);
+    //WiFi.disconnect(true);
     WiFi.begin(ssid, password);
+    //WiFi.begin(ssid, password, wifiChannel, bssidNICK);
+
     int i = 0;
     while (WiFi.status() != WL_CONNECTED)
     {
       delay(500);
       Serial.print(".");
       i++;
-      if (i > 20) {
+      if (i > 60) {
         activeConnection = false;
         break;
       }
@@ -272,6 +313,7 @@ void setup() {
       Serial.println(" failed after 10 seconds.");
       Serial.print("Attempting to connect to ");
       Serial.print(ssidAlt);
+      //WiFi.begin(ssidAlt, passwordAlt, wifiChannel, bssidNICK);
       WiFi.begin(ssidAlt, passwordAlt);
       activeConnection = true;
       i = 0;
@@ -280,7 +322,7 @@ void setup() {
         delay(500);
         Serial.print(".");
         i++;
-        if (i > 20) {
+        if (i > 60) {
           activeConnection = false;
           break;
         }
@@ -399,7 +441,7 @@ void readCO2(unsigned char ucData) {
     co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 200 && loopCnt > 1 ) {   
+  if ( co2 < 150 && loopCnt > 1 ) {   
     //bad read
     Serial.print("bad CO2 read");
     co2 = old_co2;
@@ -449,6 +491,8 @@ void displayInfo() {
   Serial.print("Humidity: ");
   Serial.print(rh);
   Serial.println(" %");
+  Serial.print("BSSID: ");
+  Serial.println(WiFi.BSSIDstr());
   Serial.println("----------------------------------");
   Serial.println();
 
@@ -512,11 +556,27 @@ void displayInfo() {
     display.drawString(0, 11, s);
 
     // For testing and debugging only, to be removed in deployment
+    /*
     s = "VOC CO2: ";
     s += String (vocCO2);
     s += " ppm";
     display.drawString(0, 27, s);
 
+        // For testing and debugging only, to be removed in deployment
+    s = "BSSID: ";
+    s += (WiFi.BSSIDstr());
+    display.drawString(0, 43, s);
+*/
+//abcd
+    s = "DelLoop: ";
+    s += delNum;
+   // s += " ppm";
+    display.drawString(0, 27, s);
+
+        // For testing and debugging only, to be removed in deployment
+    s = "Heap: ";
+    s += (ESP.getFreeHeap());
+    display.drawString(0, 43, s);
 
 
     displayCount = -1;
@@ -564,6 +624,8 @@ void uploadData() {
       data += lux_avg2;
       data += "&VOC=";
       data += vocTVOC;
+      data += "&heap=";
+      data += ESP.getFreeHeap();
 
       Serial.println(data);
       wdt_reset();
@@ -604,7 +666,10 @@ void uploadData() {
        }
       
     }
+    
+    
   }
+  
 }
 void reConnect() {
   WiFi.mode(WIFI_OFF);
@@ -1043,6 +1108,15 @@ void updatePMSignature() {
   Serial.println("PM25 Signatures Updated");
 }
 
+/*
+void tcpCleanup()
+{
+  while(tcp_tw_pcbs!=NULL)
+  {
+    tcp_abort(tcp_tw_pcbs);
+  }
+}*/
+
 void loop() {
   ESP.wdtFeed();
   pmSerial.enableRx(true);
@@ -1084,19 +1158,52 @@ void loop() {
     readLight();
   }
   if (activeConnection) uploadData();
-  //wdt_reset();
-  delay(1000);
   wdt_reset();
 
+  //potentially remove this delay (?)
+  delay(1000);
+  wdt_reset();
+  //tcpCleanup(); //not needed anymore Originally had as an attempt to stop memory leak
+  Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
+
+// every thirty loops do a 2000 delay to potentially(?) clear out local variables and free memory...
+  if(delNum > 30){
+    delay(2000);
+    Serial.println("Cleaning Delay *********************************");
+    delNum = 0;
+  } 
+
+
+  //do anyway.
+    Serial.print("Delay Loop: ");
+    Serial.println(delNum);
+    delNum++;
+
+   wdt_reset(); 
+ /**************Added****************/
+
+ 
+//del is integer of 2000
+  delay(del);
   h = dht.readHumidity();
   t = dht.readTemperature();
+  if (t == 0 || !isnan(t) )   // or any kind of error
+  {
+    Serial.print( millis()); Serial.print("ERROR DHT ERROR");
+    del += 100;             // adapt delay
+    Serial.println(del);
+  }
+  
+ /******************************/
 
+  
   if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
   {
     temp = t;
     rh = h;
     hIndex = dht.computeHeatIndex(t, h, false);  //calc heat index
   }
+
   
   wdt_reset();
   displayInfo();
