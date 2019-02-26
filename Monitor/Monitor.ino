@@ -96,11 +96,11 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "10";
+const String espId = "8";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 
 //displays firmware when first booting up so that the version is known.
-const String firmwareVers = "ACS 4";
+const String firmwareVers = "2.1";
 uint8_t bssidNICK[6] = {0x00, 0x5D, 0x73, 0x56, 0xC6, 0xED};
 //00:5D:73:56:C6:ED
 int wifiChannel = 48;
@@ -135,8 +135,8 @@ int vocTVOC = -1;
 String macAddr;
 
 //Login credentials for the ESP. This will be moved to a more efficient/effective method later.
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -568,9 +568,9 @@ void displayInfo() {
     display.drawString(0, 43, s);
 */
 //abcd
-    s = "DelLoop: ";
-    s += delNum;
-   // s += " ppm";
+    s = "Del: ";
+    s += del;
+    s += " ms";
     display.drawString(0, 27, s);
 
         // For testing and debugging only, to be removed in deployment
@@ -1161,35 +1161,33 @@ void loop() {
   wdt_reset();
 
   //potentially remove this delay (?)
-  delay(1000);
+ delay(1000);
   wdt_reset();
   //tcpCleanup(); //not needed anymore Originally had as an attempt to stop memory leak
   Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
 
 // every thirty loops do a 2000 delay to potentially(?) clear out local variables and free memory...
-  if(delNum > 30){
-    delay(2000);
-    Serial.println("Cleaning Delay *********************************");
-    delNum = 0;
+  if(delNum == 0){
+    Serial.println("Initializing DHT Sensor*********************************");
+    delay(5000);
+    delNum++;
   } 
 
 
   //do anyway.
-    Serial.print("Delay Loop: ");
+    Serial.print("Initiation Loop: ");
     Serial.println(delNum);
-    delNum++;
+  //  delNum++;
 
    wdt_reset(); 
  /**************Added****************/
-
- 
-//del is integer of 2000
+//del is integer of 2100
   delay(del);
   h = dht.readHumidity();
   t = dht.readTemperature();
-  if (t == 0 || !isnan(t) )   // or any kind of error
+  if ( isnan(t) || t == 0 || h == 0 )   // or any kind of error
   {
-    Serial.print( millis()); Serial.print("ERROR DHT ERROR");
+    Serial.print( millis()); Serial.print(" ,ERROR DHT ERROR Time: ");
     del += 100;             // adapt delay
     Serial.println(del);
   }
