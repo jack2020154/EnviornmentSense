@@ -24,21 +24,9 @@
 //*****  Revision History  *****
 //******************************
 
-//going to try
-//esp 2.2.0 + dht 1.1.1 (doesn't connect to wifi)
-//esp 2.3.0 + dht 1.1.1 X (failed)
-//esp 2.4.2 + no wifi connection (success) (memory leak doesnt appear with this)
-//esp 2.3.0 + wifi persistent + dht 1.1.1
-//esp 2.4.2 + wifi persistent + dht 1.1.1
-//esp 2.5.0 + jai's version of dht  
-// try VOC sensor? voc resets to -1 and doesnt warm up properly after that
-
-//attempt addaptive delay to restart the local loop
-//attempt to summon deconstructor 
-
 //possibly : wifi disconnection
 //knows: works well under certain wifi connection (?)
-
+// v2.1 somehow works...
 // v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
 //the correction curves so after an update the curves work.  
 // v0.9 Eliminated local wifi router - changed WIFI_AP_STA to WIFI_STA due to library updates
@@ -96,11 +84,9 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "8";
+const String espId = "1";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-
-//displays firmware when first booting up so that the version is known.
-const String firmwareVers = "2.1";
+const String firmwareVers = "ACS 4";
 uint8_t bssidNICK[6] = {0x00, 0x5D, 0x73, 0x56, 0xC6, 0xED};
 //00:5D:73:56:C6:ED
 int wifiChannel = 48;
@@ -124,8 +110,6 @@ byte eeprom0, eeprom1, eeprom4, eeprom5;
 unsigned int eeprom2, eeprom3;
 unsigned int result;
 String VOClevels;
-
-//delays for the DHT sensor. chose 2100 because 2000 is right on the border for documentation for how long the DHT sensor should be given.
 int del = 2100;
 
 //default values for VOC
@@ -135,8 +119,8 @@ int vocTVOC = -1;
 String macAddr;
 
 //Login credentials for the ESP. This will be moved to a more efficient/effective method later.
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 const char* ssidAlt = "CISS_Employees_Students";
 const char* passwordAlt = "";
 
@@ -1159,40 +1143,38 @@ void loop() {
   }
   if (activeConnection) uploadData();
   wdt_reset();
-
-  //potentially remove this delay (?)
- delay(1000);
+  delay(1000);
   wdt_reset();
-  //tcpCleanup(); //not needed anymore Originally had as an attempt to stop memory leak
   Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
 
-// every thirty loops do a 2000 delay to potentially(?) clear out local variables and free memory...
-  if(delNum == 0){
-    Serial.println("Initializing DHT Sensor*********************************");
-    delay(5000);
-    delNum++;
+//
+  if(delNum > 30){
+    delay(2000);
+    Serial.println("Cleaning Delay *********************************");
+    delNum = 0;
   } 
 
 
-  //do anyway.
-    Serial.print("Initiation Loop: ");
+ //
+    Serial.print("Delay Loop: ");
     Serial.println(delNum);
-  //  delNum++;
+    delNum++;
 
    wdt_reset(); 
- /**************Added****************/
-//del is integer of 2100
+
+
   delay(del);
   h = dht.readHumidity();
   t = dht.readTemperature();
-  if ( isnan(t) || t == 0 || h == 0 )   // or any kind of error
+  //originally !
+  if (t == 0 || isnan(t) )   // or any kind of error
   {
-    Serial.print( millis()); Serial.print(" ,ERROR DHT ERROR Time: ");
+    Serial.print( millis()); Serial.print("ERROR DHT ERROR");
     del += 100;             // adapt delay
     Serial.println(del);
   }
   
- /******************************/
+
 
   
   if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
