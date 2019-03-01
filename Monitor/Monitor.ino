@@ -28,7 +28,7 @@
 //knows: works well under certain wifi connection (?)
 // v2.1 somehow works...
 // v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
-//the correction curves so after an update the curves work.  
+//the correction curves so after an update the curves work.
 // v0.9 Eliminated local wifi router - changed WIFI_AP_STA to WIFI_STA due to library updates
 // v0.8 Added JSON page at port 8080
 // v0.7 Added support for Light Sensor, switched SDA & SCL for Wire library
@@ -38,9 +38,9 @@
 //added this to hopefully solve the memory leak
 // no need for #include
 /*
-struct tcp_pcb;
-extern struct tcp_pcb* tcp_tw_pcbs;
-extern "C" void tcp_abort (struct tcp_pcb* pcb);
+  struct tcp_pcb;
+  extern struct tcp_pcb* tcp_tw_pcbs;
+  extern "C" void tcp_abort (struct tcp_pcb* pcb);
 */
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
@@ -103,7 +103,7 @@ bool wifiConnection = true;
 
 bool vocConnected = true;
 
-//this pertains to the VOC baseline. As the ESP boots up these values are false until confirmed. 
+//this pertains to the VOC baseline. As the ESP boots up these values are false until confirmed.
 bool baselineAvailable = false;
 bool baselineLoaded = false;
 byte eeprom0, eeprom1, eeprom4, eeprom5;
@@ -119,10 +119,8 @@ int vocTVOC = -1;
 String macAddr;
 
 //Login credentials for the ESP. This will be moved to a more efficient/effective method later.
-const char* ssid = "CISS_Employees_Students";
-const char* password = "";
-const char* ssidAlt = "CISS_Employees_Students";
-const char* passwordAlt = "";
+const char* ssid = "Home";
+const char* password = "7809882089";
 
 //The location that the sensor represents. Ex: H529
 String location;
@@ -134,7 +132,7 @@ String receivedData[7];
 
 //The upload interval for the sensor. The ESP will average the data obtained over this upload Interval and upload it.
 static unsigned long uploadInterval = 1000 * 15;//ms between uploads
-//The interval at which the sensor obtains the correction curve values. 
+//The interval at which the sensor obtains the correction curve values.
 static unsigned long receiveDataInterval = 1000 * 60 * 60;
 //How long is needed for the VOC to warm up
 static unsigned long vocWarmup = 1000 * 60 * 20;
@@ -241,106 +239,55 @@ void setup() {
   // Connect to WiFi network
   //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
   //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
-  if (wifiConnection) {
-    WiFi.mode(WIFI_OFF);
-    delay(1000);
-    WiFi.persistent( false );
-    WiFi.mode(WIFI_STA);
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-    //WiFi.persistent(false);
-    //WiFi.disconnect(true);
-    WiFi.begin(ssid, password);
-    //WiFi.begin(ssid, password, wifiChannel, bssidNICK);
+  WiFi.mode(WIFI_OFF);
+  delay(1000);
+  WiFi.persistent( false );
+  WiFi.mode(WIFI_STA);
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  //WiFi.persistent(false);
+  //WiFi.disconnect(true);
+  WiFi.begin(ssid, password);
+  //WiFi.begin(ssid, password, wifiChannel, bssidNICK);
 
-    int i = 0;
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(500);
-      Serial.print(".");
-      i++;
-      if (i > 60) {
-        activeConnection = false;
-        break;
-      }
-    }
-    if (activeConnection) {
-      Serial.println();
-      Serial.println("WiFi connected");
-
-      Serial.println();
-      Serial.print("MAC Address: ");
-      Serial.println( WiFi.macAddress() );
-      macAddr = WiFi.macAddress();
-      Serial.println("WiFi connected");
-      Serial.print("IP Address: ");
-      IP = ipToString( WiFi.localIP() );
-      Serial.println( IP );
-      receiveData();
-      if (location  != "999") {
-        Serial.println("Data received.");
-        display.clear();
-        display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
-        display.drawString(64, 40, location);
-        display.display();
-      }
-    }
-    else if (!activeConnection) {
-      WiFi.mode(WIFI_OFF);
-      delay(500);
-      Serial.println();
-      Serial.print("Connection to ");
-      Serial.print(ssid);
-      Serial.println(" failed after 10 seconds.");
-      Serial.print("Attempting to connect to ");
-      Serial.print(ssidAlt);
-      //WiFi.begin(ssidAlt, passwordAlt, wifiChannel, bssidNICK);
-      WiFi.begin(ssidAlt, passwordAlt);
-      activeConnection = true;
-      i = 0;
-      while (WiFi.status() != WL_CONNECTED)
-      {
-        delay(500);
-        Serial.print(".");
-        i++;
-        if (i > 60) {
-          activeConnection = false;
-          break;
-        }
-      }
-      if (activeConnection) {
-        Serial.println();
-        Serial.println("WiFi connected");
-
-        Serial.println();
-        Serial.print("MAC Address: ");
-        Serial.println( WiFi.macAddress() );
-        macAddr = WiFi.macAddress();
-
-        Serial.println("WiFi connected");
-        Serial.print("IP Address: ");
-        IP = ipToString( WiFi.localIP() );
-        Serial.println( IP );
-        receiveData();
-        if (location != "999") {
-          Serial.println("Data received.");
-          display.clear();
-          display.setTextAlignment(TEXT_ALIGN_CENTER);
-          display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
-          display.drawString(64, 40, location);
-          display.display();
-        }
-      } else if (!activeConnection) {
-        IP = "NO CONNECTION";
-        Serial.println();
-        Serial.println("Connection to both networks failed.");
-      }
+  int i = 0;
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+    i++;
+    if (i > 60) {
+      break;
     }
   }
-  else if (!wifiConnection) IP = "TEST MODE";
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println();
+    Serial.println("WiFi connected");
+
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    macAddr = WiFi.macAddress();
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    receiveData();
+    if (location  != "999") {
+      Serial.println("Data received.");
+      display.clear();
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      display.drawXbm(0, 0, concordia2_width, concordia2_height, concordia2_bits);
+      display.drawString(64, 40, location);
+      display.display();
+    }
+    else {
+      Serial.println("Connection timed out after 30 seconds");
+      IP = "NO CONNECTION";
+    }
+  }
   readCurves();
 }
 
@@ -375,35 +322,35 @@ void calculatePM()
 
     pm25_corrected = a_pm25 * pm25 * pm25 + b_pm25 * pm25 + c_pm25;
 
-Serial.print("co2 sum: ");
-Serial.println(co2_avg);
-Serial.print("co2 value: ");
-Serial.println(co2); 
+    Serial.print("co2 sum: ");
+    Serial.println(co2_avg);
+    Serial.print("co2 value: ");
+    Serial.println(co2);
 
-Serial.print("Loop count: ");
-Serial.println(loopCnt);   
- 
-if(loopCnt > 0){
-  Serial.print("co2 Delta: ");
-  Serial.println(abs((co2_avg/loopCnt - co2)));
-}
+    Serial.print("Loop count: ");
+    Serial.println(loopCnt);
+
+    if (loopCnt > 0) {
+      Serial.print("co2 Delta: ");
+      Serial.println(abs((co2_avg / loopCnt - co2)));
+    }
 
 
-if(co2 < 8000 && co2 != 0) { //preventing insanely high values from being entered in
-   
-    loopCnt++;      //do averages
-    pm25_avg += pm25_corrected;
-    pm10_avg += pm10;
-    pm100_avg += pm100;
-    temp_avg += temp;
-    rh_avg += rh;
-    co2_avg += co2;
-    lux_avg += int(lux + 0.5);
-       Serial.println("Data is viable");
-} else {
-   Serial.println("Data from CO2 was too large or zero");
-}
-  
+    if (co2 < 8000 && co2 != 0) { //preventing insanely high values from being entered in
+
+      loopCnt++;      //do averages
+      pm25_avg += pm25_corrected;
+      pm10_avg += pm10;
+      pm100_avg += pm100;
+      temp_avg += temp;
+      rh_avg += rh;
+      co2_avg += co2;
+      lux_avg += int(lux + 0.5);
+      Serial.println("Data is viable");
+    } else {
+      Serial.println("Data from CO2 was too large or zero");
+    }
+
   }
   else
     Serial.print("#");
@@ -425,7 +372,7 @@ void readCO2(unsigned char ucData) {
     co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 150 && loopCnt > 1 ) {   
+  if ( co2 < 150 && loopCnt > 1 ) {
     //bad read
     Serial.print("bad CO2 read");
     co2 = old_co2;
@@ -541,23 +488,23 @@ void displayInfo() {
 
     // For testing and debugging only, to be removed in deployment
     /*
-    s = "VOC CO2: ";
-    s += String (vocCO2);
-    s += " ppm";
-    display.drawString(0, 27, s);
+      s = "VOC CO2: ";
+      s += String (vocCO2);
+      s += " ppm";
+      display.drawString(0, 27, s);
 
         // For testing and debugging only, to be removed in deployment
-    s = "BSSID: ";
-    s += (WiFi.BSSIDstr());
-    display.drawString(0, 43, s);
-*/
-//abcd
+      s = "BSSID: ";
+      s += (WiFi.BSSIDstr());
+      display.drawString(0, 43, s);
+    */
+    //abcd
     s = "Del: ";
     s += del;
     s += " ms";
     display.drawString(0, 27, s);
 
-        // For testing and debugging only, to be removed in deployment
+    // For testing and debugging only, to be removed in deployment
     s = "Heap: ";
     s += (ESP.getFreeHeap());
     display.drawString(0, 43, s);
@@ -635,25 +582,25 @@ void uploadData() {
         lux_avg = 0;
         PostError = 0;
         lastTime = millis();
-        
-        //added by nick 
+
+        //added by nick
         http.end();
 
       } else {
         Serial.printf("[HTTP] POST... failed, error: %s\n", http.errorToString(httpCode).c_str());
         PostError++;
       }
-      //only checking to receive data after an hour; 
-       if ( ( millis() - lastTime_receive ) > receiveDataInterval ) {
+      //only checking to receive data after an hour;
+      if ( ( millis() - lastTime_receive ) > receiveDataInterval ) {
         receiveData();
         lastTime_receive = millis();
-       }
-      
+      }
+
     }
-    
-    
+
+
   }
-  
+
 }
 void reConnect() {
   WiFi.mode(WIFI_OFF);
@@ -667,32 +614,24 @@ void reConnect() {
     Serial.print(".");
     i++;
     if (i > 20) {
-      activeConnection = false;
       break;
     }
   }
-  if (!activeConnection) {
-    delay(1000);
-    WiFi.mode(WIFI_OFF);
-    delay(1000);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssidAlt, passwordAlt);
-    i = 0;
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(500);
-      Serial.print(".");
-      i++;
-      if (i > 20) {
-        activeConnection = false;
-        break;
-      }
-    }
-  }
-  if (activeConnection) {
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Reconnected");
+    Serial.println();
+    Serial.print("MAC Address: ");
+    Serial.println( WiFi.macAddress() );
+    macAddr = WiFi.macAddress();
+    Serial.println("WiFi connected");
+    Serial.print("IP Address: ");
+    IP = ipToString( WiFi.localIP() );
+    Serial.println( IP );
+    receiveData();
     readCurves();
+  } else Serial.println("Reconnection failed");
   }
-}
 
 int convert2AQI(double pm)
 {
@@ -807,7 +746,7 @@ void addTime() {
       EEPROM.put(4, (currentTime >> 8) & 0x00FF);
       EEPROM.put(5, currentTime & 0x00FF);
       EEPROM.commit();
-    } else Serial.println("Burn in completed, no need to update");  
+    } else Serial.println("Burn in completed, no need to update");
   }
 }
 
@@ -828,9 +767,9 @@ void receiveData() {
       Serial.println(httpCode);
       receivedData[i] = 999;
     }
-     getClient.end();
+    getClient.end();
   }
-  
+
   location = receivedData[0];
   location.trim();
   a_pm25_temp = receivedData[1].toFloat();
@@ -841,7 +780,7 @@ void receiveData() {
   c_co2_temp = receivedData[6].toFloat();
   //Ensures that invalid responses don't get written to memory
   if ((int)a_pm25_temp != 999 && (int)b_pm25_temp != 999 && (int)c_pm25_temp != 999) {
-    if(a_pm25_temp != a_pm25 || b_pm25_temp != b_pm25 || c_pm25_temp != c_pm25) {
+    if (a_pm25_temp != a_pm25 || b_pm25_temp != b_pm25 || c_pm25_temp != c_pm25) {
       Serial.println("Difference in server and current curves of PM25 detected, updating");
       a_pm25 = a_pm25_temp;
       b_pm25 = b_pm25_temp;
@@ -855,7 +794,7 @@ void receiveData() {
     reConnect();
   }
   if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
-    if(a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
+    if (a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
       Serial.println("Difference in server and current curves of CO2 detected, updating");
       a_co2 = a_co2_temp;
       b_co2 = b_co2_temp;
@@ -868,7 +807,7 @@ void receiveData() {
     Serial.println("One or more CO2 values are invalid, nullifying");
     reConnect();
   }
-  
+
 }
 
 void commitPMCurves() {
@@ -1039,7 +978,7 @@ void readCurves() {
     Serial.println("CO2 sign byte invalid, rewriting.");
     updateCo2Signature();
   }
-  if(a_pm25_sig_read == 0 || b_pm25_sig_read == 0 || c_pm25_sig_read == 0) {
+  if (a_pm25_sig_read == 0 || b_pm25_sig_read == 0 || c_pm25_sig_read == 0) {
     Serial.println("PM25 sign byte invalid, rewriting.");
     updatePMSignature();
   }
@@ -1056,13 +995,13 @@ void readMemory() {
 
 void updateCo2Signature() {
   int a_co2_sig = 2, b_co2_sig = 2, c_co2_sig = 2;
-  if(a_co2 < 0) {
+  if (a_co2 < 0) {
     a_co2_sig = 1;
   }
-  if(b_co2 < 0) {
+  if (b_co2 < 0) {
     b_co2_sig = 1;
   }
-  if(c_co2 < 0) {
+  if (c_co2 < 0) {
     c_co2_sig = 1;
   }
   EEPROM.put(30, a_co2_sig);
@@ -1075,13 +1014,13 @@ void updateCo2Signature() {
 
 void updatePMSignature() {
   int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
-  if(a_pm25 < 0) {
+  if (a_pm25 < 0) {
     a_pm25_sig = 1;
   }
-  if(b_pm25 < 0) {
+  if (b_pm25 < 0) {
     b_pm25_sig = 1;
   }
-  if(c_pm25 < 0) {
+  if (c_pm25 < 0) {
     c_pm25_sig = 1;
   }
   EEPROM.put(24, a_pm25_sig);
@@ -1093,13 +1032,13 @@ void updatePMSignature() {
 }
 
 /*
-void tcpCleanup()
-{
+  void tcpCleanup()
+  {
   while(tcp_tw_pcbs!=NULL)
   {
     tcp_abort(tcp_tw_pcbs);
   }
-}*/
+  }*/
 
 void loop() {
   ESP.wdtFeed();
@@ -1147,20 +1086,20 @@ void loop() {
   wdt_reset();
   Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
 
-//
-  if(delNum > 30){
+  //
+  if (delNum > 30) {
     delay(2000);
     Serial.println("Cleaning Delay *********************************");
     delNum = 0;
-  } 
+  }
 
 
- //
-    Serial.print("Delay Loop: ");
-    Serial.println(delNum);
-    delNum++;
+  //
+  Serial.print("Delay Loop: ");
+  Serial.println(delNum);
+  delNum++;
 
-   wdt_reset(); 
+  wdt_reset();
 
 
   delay(del);
@@ -1173,10 +1112,10 @@ void loop() {
     del += 100;             // adapt delay
     Serial.println(del);
   }
-  
 
 
-  
+
+
   if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
   {
     temp = t;
@@ -1184,7 +1123,7 @@ void loop() {
     hIndex = dht.computeHeatIndex(t, h, false);  //calc heat index
   }
 
-  
+
   wdt_reset();
   displayInfo();
   Serial.println("Info Displayed");
