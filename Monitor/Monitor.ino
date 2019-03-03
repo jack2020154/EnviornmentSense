@@ -1,8 +1,5 @@
 //******************************
-//Live Version
-
-//crash branch
-
+//Crashbranch/LiveVers
 //Version used for the CO2 Calibration on Jan27, Feb 1, Feb 17
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
@@ -20,17 +17,16 @@
 //*The SDA pin on the Light Sensor connects to D2 (GPIO4)
 //*The SCL pin on the Light Sensor connects to D1 (GPIO5)
 //
-//*Version：V1.95
+//*Version：V2.31
 //*Author：Joel Klammer, Jack W, Nick H
 //*Date：Feb 20, 2018
 //******************************
 //*****  Revision History  *****
 //******************************
 
-//possibly : wifi disconnection
-//knows: works well under certain wifi connection (?)
-
-// v2.1 somehow works...
+// v2.31 Forcing ESP to reboot when VOC is reading values less than 10
+// v2.3 Added Documentation and fix for DHT22 sensor zeroing out
+// v2.1 Making sure that outrageous CO2 values are not added to the average. Light Filter applied.
 // v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
 //the correction curves so after an update the curves work.
 // v0.9 Eliminated local wifi router - changed WIFI_AP_STA to WIFI_STA due to library updates
@@ -91,14 +87,8 @@ SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 //Change for each ESP upload
 const String espId = "40";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-const String firmwareVers = "Version 2.3";
-uint8_t bssidNICK[6] = {0x00, 0x5D, 0x73, 0x56, 0xC6, 0xED};
-//00:5D:73:56:C6:ED
-int wifiChannel = 48;
+const String firmwareVers = "Version 2.31";
 
-
-//The delay Time
-static int delNum = 0;
 
 
 //wifi connection, can be used to bypass the need to connect to wifi if false
@@ -310,7 +300,7 @@ void setup() {
 
 
 
-
+//Calculating PM sensor values
 void calculatePM()
 {
   unsigned short sum = 0;
@@ -522,8 +512,8 @@ void displayInfo() {
       display.drawString(0, 43, s);
     */
 
-    s = "Del: ";
-    s += delNum;
+    s = "**************";
+    //s += delNum;
     //s += " ms";
     display.drawString(0, 27, s);
 
