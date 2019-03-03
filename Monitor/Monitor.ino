@@ -29,6 +29,7 @@
 
 //possibly : wifi disconnection
 //knows: works well under certain wifi connection (?)
+
 // v2.1 somehow works...
 // v0.9-1.9 Added HTTP GET for pm25 and CO2 correction curve values, added VOC and TSL2591 Sensor, added EEPROM save to
 //the correction curves so after an update the curves work.
@@ -38,13 +39,7 @@
 // v0.6 Added asynchronous webpage support, graphic welcome screen
 // v0.5
 
-//added this to hopefully solve the memory leak
-// no need for #include
-/*
-  struct tcp_pcb;
-  extern struct tcp_pcb* tcp_tw_pcbs;
-  extern "C" void tcp_abort (struct tcp_pcb* pcb);
-*/
+
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -78,11 +73,11 @@ SH1106 display(0x3c, 4, 5);
 
 #define DHTTYPE DHT22        // DHT 22  (AM2302), AM2321
 
-//Test viable DHT connections
-//D4/GPIO2 = 2
-//D3/GPIO0 = 0
-//RX/GPIO3 = 3
-//SD3/GPIO10 = 10
+//Test viable DHT Pin connections. Test in this order
+//D4/GPIO2 --> 2
+//D3/GPIO0 --> 0
+//SD3/GPIO10 --> 10
+//RX/GPIO3 --> 3
  
 #define DHTPIN 2             
 DHT dht(DHTPIN, DHTTYPE);
@@ -135,6 +130,9 @@ const char* password = "50308888HO";
 
 //The location that the sensor represents. Ex: H529
 String location;
+
+//Password to be entered into the SQL Database
+String server_password = "tetrahedron";
 
 //The sensor will use HTTP GET to obtain a series of correction values. These are the names of the php files on the webserver
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
@@ -196,11 +194,15 @@ void setup() {
   dht.begin();
   //initializing the light sensor
   light_sensor_found = light_sensor.begin();
+
+  //If there is a light sensor, set certain parameters
   if (light_sensor_found)
   {
     light_sensor.setGain(TSL2591_GAIN_MED);      // 25x gain
     light_sensor.setTiming(TSL2591_INTEGRATIONTIME_300MS);
   }
+  
+  //Upon startup, will display the concordia logo. Initiating OLED display
   display.init();
   display.flipScreenVertically();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -211,13 +213,18 @@ void setup() {
   display.display();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
+//Starting Serial
   Serial.begin(115200);
+//Starting PM sensor Serial
   pmSerial.begin(9600);
+//Starting CO2 Sensor Serial
   co2Serial.begin(9600);
 
   EEPROM.begin(512);
   //reads the correction curves from the webserver
   readCurves();
+
+  //Getting the VOC Sensor Baseline
   CCS811Core::status returnCode = vocSensor.begin();
   if ((EEPROM.get(0, eeprom0) == 0xA5) && (EEPROM.get(1, eeprom1) == 0xB2)) {
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
@@ -232,6 +239,7 @@ void setup() {
   } else {
     Serial.println("Baseline not loaded");
   }
+  //First time loaded, no baseline
   if ((EEPROM.get(4, eeprom4) == 0xFF) && (EEPROM.get(5, eeprom5) == 0xFF)) {
     Serial.println("First time plug in. Resetting EEPROM 0x000000100 and 0x000000101 to 0");
     EEPROM.put(4, 0x00);
@@ -249,6 +257,7 @@ void setup() {
   Serial.println(" minutes");
   // Connect to WiFi network
   //WIFI_AP_STA is the combination of WIFI_STA and WIFI_AP. It allows you to create a local WiFi connection and connect to another WiFi router.
+  //Potentially use later on to connect to to establish wifi (?)
   //WIFI_OFF changing WiFi mode to WIFI_OFF along with WiFi.forceSleepBegin() will put wifi into a low power state, provided wifi.nullmodesleep(false) has not been called.
   WiFi.mode(WIFI_OFF);
   delay(1000);
@@ -258,8 +267,6 @@ void setup() {
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-  //WiFi.persistent(false);
-  //WiFi.disconnect(true);
   WiFi.begin(ssid, password);
 
   int i = 0;
@@ -364,17 +371,7 @@ void calculatePM()
   }
   else
     Serial.print("#");
-    //Here I can add the other thing
-/*
-      loopCnt++;      //do averages
-      pm25_avg = 0;
-      pm10_avg = 0;
-      pm100_avg = 0;
-      temp_avg += temp;
-      rh_avg += rh;
-      co2_avg += co2;
-      lux_avg += int(lux + 0.5);
-  */    
+
 
     
     
@@ -404,6 +401,8 @@ void readCO2(unsigned char ucData) {
 }
 
 void displayInfo() {
+//This function displays Information on the serial monitor as well as on the display
+
 
   Serial.println("----------------------------------");
   Serial.print("System clock: ");
@@ -522,14 +521,14 @@ void displayInfo() {
       s += (WiFi.BSSIDstr());
       display.drawString(0, 43, s);
     */
-    //abcd
+
     s = "Del: ";
     s += delNum;
     //s += " ms";
     display.drawString(0, 27, s);
 
     // For testing and debugging only, to be removed in deployment
-    s = "Heap: ";
+    s = "MemHeap: ";
     s += (ESP.getFreeHeap());
     display.drawString(0, 43, s);
 
@@ -581,6 +580,8 @@ void uploadData() {
       data += vocTVOC;
       data += "&heap=";
       data += ESP.getFreeHeap();
+      data += "&password=";
+      data += server_password;
 
       Serial.println(data);
       wdt_reset();
@@ -694,7 +695,7 @@ void readLight()
 }
 
 void readVOC() {
-  ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+  ESP.wdtFeed(); //Restarting Watchdog Timer
   unsigned int memval4 = EEPROM.get(4, eeprom4);
   unsigned int memval5 = EEPROM.get(5, eeprom5);
   unsigned int currentTime = memval4 * 256 + memval5;
@@ -703,7 +704,7 @@ void readVOC() {
   bool burnInTime = currentTime >= vocBurnin;
   if (!baselineAvailable && !burnInTime) {
     Serial.println("****No baseline found. No burn in time so far");
-    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+    ESP.wdtFeed(); //Restarting Watchdog Timer
     VOClevels =  (String)(currentTime * 100 / vocBurnin) + "% Burn";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
@@ -711,7 +712,7 @@ void readVOC() {
   }
   else if (!baselineAvailable && burnInTime) {
     
-    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+    ESP.wdtFeed(); //Restarting Watchdog Timer
     Serial.println("baseline not availabible but burnintime is.");
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
     result = vocSensor.getBaseline();
@@ -723,13 +724,13 @@ void readVOC() {
     baselineAvailable = true;
     errorStatus = vocSensor.setBaseline(baselineToApply);
     if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
-      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+      ESP.wdtFeed(); //Restarting Watchdog Timer
       baselineLoaded = true;
       Serial.println("Baseline loaded");
       VOClevels =  "BOOTING";
     }
     else {
-      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+      ESP.wdtFeed(); //Restarting Watchdog Timer
       Serial.println("No Baseline loaded");
       baselineLoaded = false;
       VOClevels = "ERROR";
@@ -738,7 +739,7 @@ void readVOC() {
 
   else if (baselineAvailable && !baselineLoaded) {
     Serial.println("****BaselineAvailable but no baselineLoaded");
-    ESP.wdtFeed();//********* FEEEEEDING THE DOG
+    ESP.wdtFeed();//Restarting Watchdog Timer
     VOClevels =  "ERROR";
     baselineAvailable = false;
     vocSensor.readAlgorithmResults();
@@ -746,7 +747,7 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && !vocTime) {
-    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+    ESP.wdtFeed(); //Restarting Watchdog Timer
     Serial.println("****Baseline found and loaded but Warming Up");
 
     VOClevels =  (String)(millis() * 100 / vocWarmup) + "% WARM";
@@ -755,13 +756,13 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && vocTime) {
-    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+    ESP.wdtFeed(); //Restarting Watchdog Timer
         Serial.println("****WARM UP FINISHED");
 
     if (vocSensor.dataAvailable()) {
           Serial.println("****VOC Data Available");
 
-      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+      ESP.wdtFeed(); //Restarting Watchdog Timer
       vocSensor.readAlgorithmResults();
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
@@ -772,10 +773,9 @@ void readVOC() {
       if(vocTVOC < 10){
         ESP.restart();
       }
-
       
     } else {
-      Serial.println("****NOT AVAILABLE VOC DATA");
+      Serial.println("****NO AVAILABLE VOC DATA");
     }
   }
 }
@@ -960,6 +960,8 @@ void commitCo2Curves () {
   Serial.println("CO2 curves committed");
 }
 
+//Reading the curves from EEPROM. The curves gained from online will be stored
+//on the EEPROM and only updated if there is a difference found between the eeprom curves and server
 void readCurves() {
   byte eepromRead;
   unsigned int a_pm25_int_read = EEPROM.get(6, eepromRead);
@@ -992,6 +994,7 @@ void readCurves() {
   unsigned int a_co2_int2_read = EEPROM.get(115, eepromRead);
   unsigned int b_co2_int2_read = EEPROM.get(118, eepromRead);
   unsigned int c_co2_int2_read = EEPROM.get(121, eepromRead);
+  
   if (a_pm25_d1_read == 255 || b_pm25_d1_read == 255 || c_co2_d1_read == 255) {
     Serial.println("Memory empty for PM2.5 calibration, using default curves");
     a_pm25 = 0.0061;
@@ -1046,6 +1049,7 @@ void readMemory() {
 }
 
 void updateCo2Signature() {
+  //This is to record signs
   int a_co2_sig = 2, b_co2_sig = 2, c_co2_sig = 2;
   if (a_co2 < 0) {
     a_co2_sig = 1;
@@ -1065,6 +1069,7 @@ void updateCo2Signature() {
 }
 
 void updatePMSignature() {
+  //This part is to store signs
   int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
   if (a_pm25 < 0) {
     a_pm25_sig = 1;
@@ -1083,21 +1088,11 @@ void updatePMSignature() {
   Serial.println("PM25 Signatures Updated");
 }
 
-/*
-  void tcpCleanup()
-  {
-  while(tcp_tw_pcbs!=NULL)
-  {
-    tcp_abort(tcp_tw_pcbs);
-  }
-  }*/
+
 
 void loop() {
 
-  //try first vers
-  //try yielding vers
-  //moar debugging
-  
+
   
   delay(200);
   Serial.println("*******starting loop...");
@@ -1191,9 +1186,8 @@ void loop() {
   //originally !
   if (t == 0 || isnan(t) )   // or any kind of error
   {
-    Serial.print( millis()); Serial.print("**ERROR DHT ERROR**");
-    //del += 100;             // adapt delay
-    Serial.println(del);
+    Serial.print( millis()); Serial.println(" **ERROR DHT ERROR**");
+
   }
 
 
