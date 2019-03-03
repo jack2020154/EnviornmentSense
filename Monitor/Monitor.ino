@@ -1,5 +1,8 @@
 //******************************
 //Live Version
+
+//crash branch
+
 //Version used for the CO2 Calibration on Jan27, Feb 1, Feb 17
 //*The TX pin on the PM sensor connects to pin D7 (GPIO 13)
 //*The RX pin on the PM sensor connects to pin D8 (GPIO 15)
@@ -74,7 +77,14 @@ SH1106 display(0x3c, 4, 5);
 // GND --> GND
 
 #define DHTTYPE DHT22        // DHT 22  (AM2302), AM2321
-#define DHTPIN 2             // D4: digital pin sensor is connected to
+
+//Test viable DHT connections
+//D4/GPIO2 = 2
+//D3/GPIO0 = 0
+//RX/GPIO3 = 3
+//SD3/GPIO10 = 10
+ 
+#define DHTPIN 2             
 DHT dht(DHTPIN, DHTTYPE);
 
 Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for the sensor identifier (for your use later)
@@ -84,9 +94,9 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "1";
+const String espId = "40";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-const String firmwareVers = "ACS 4";
+const String firmwareVers = "Version 2.3";
 uint8_t bssidNICK[6] = {0x00, 0x5D, 0x73, 0x56, 0xC6, 0xED};
 //00:5D:73:56:C6:ED
 int wifiChannel = 48;
@@ -119,8 +129,9 @@ int vocTVOC = -1;
 String macAddr;
 
 //Login credentials for the ESP. This will be moved to a more efficient/effective method later.
-const char* ssid = "Home";
-const char* password = "7809882089";
+const char* ssid = "TP-Link288";
+const char* password = "50308888HO";
+//CISS_Employees_Students
 
 //The location that the sensor represents. Ex: H529
 String location;
@@ -131,7 +142,7 @@ String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "
 String receivedData[7];
 
 //The upload interval for the sensor. The ESP will average the data obtained over this upload Interval and upload it.
-static unsigned long uploadInterval = 1000 * 15;//ms between uploads
+static unsigned long uploadInterval = 1000 * 60 * 1;//ms between uploads
 //The interval at which the sensor obtains the correction curve values.
 static unsigned long receiveDataInterval = 1000 * 60 * 60;
 //How long is needed for the VOC to warm up
@@ -250,7 +261,6 @@ void setup() {
   //WiFi.persistent(false);
   //WiFi.disconnect(true);
   WiFi.begin(ssid, password);
-  //WiFi.begin(ssid, password, wifiChannel, bssidNICK);
 
   int i = 0;
   while (WiFi.status() != WL_CONNECTED)
@@ -354,6 +364,20 @@ void calculatePM()
   }
   else
     Serial.print("#");
+    //Here I can add the other thing
+/*
+      loopCnt++;      //do averages
+      pm25_avg = 0;
+      pm10_avg = 0;
+      pm100_avg = 0;
+      temp_avg += temp;
+      rh_avg += rh;
+      co2_avg += co2;
+      lux_avg += int(lux + 0.5);
+  */    
+
+    
+    
 }
 
 void readCO2(unsigned char ucData) {
@@ -500,8 +524,8 @@ void displayInfo() {
     */
     //abcd
     s = "Del: ";
-    s += del;
-    s += " ms";
+    s += delNum;
+    //s += " ms";
     display.drawString(0, 27, s);
 
     // For testing and debugging only, to be removed in deployment
@@ -670,6 +694,7 @@ void readLight()
 }
 
 void readVOC() {
+  ESP.wdtFeed(); //********* FEEEEEDING THE DOG
   unsigned int memval4 = EEPROM.get(4, eeprom4);
   unsigned int memval5 = EEPROM.get(5, eeprom5);
   unsigned int currentTime = memval4 * 256 + memval5;
@@ -677,12 +702,16 @@ void readVOC() {
   //readVOC change
   bool burnInTime = currentTime >= vocBurnin;
   if (!baselineAvailable && !burnInTime) {
+    Serial.println("****No baseline found. No burn in time so far");
+    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
     VOClevels =  (String)(currentTime * 100 / vocBurnin) + "% Burn";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
   else if (!baselineAvailable && burnInTime) {
+    
+    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
     Serial.println("baseline not availabible but burnintime is.");
     unsigned int baselineToApply = ((unsigned int)EEPROM.get(2, eeprom2) << 8 & 0xFFFF | EEPROM.get(3, eeprom3));
     result = vocSensor.getBaseline();
@@ -694,11 +723,13 @@ void readVOC() {
     baselineAvailable = true;
     errorStatus = vocSensor.setBaseline(baselineToApply);
     if (errorStatus == CCS811Core::SENSOR_SUCCESS) {
+      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
       baselineLoaded = true;
       Serial.println("Baseline loaded");
       VOClevels =  "BOOTING";
     }
     else {
+      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
       Serial.println("No Baseline loaded");
       baselineLoaded = false;
       VOClevels = "ERROR";
@@ -706,6 +737,8 @@ void readVOC() {
   }
 
   else if (baselineAvailable && !baselineLoaded) {
+    Serial.println("****BaselineAvailable but no baselineLoaded");
+    ESP.wdtFeed();//********* FEEEEEDING THE DOG
     VOClevels =  "ERROR";
     baselineAvailable = false;
     vocSensor.readAlgorithmResults();
@@ -713,17 +746,36 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && !vocTime) {
-    VOClevels =  (String)(millis() * 100 / vocWarmup) + "% Warm";
+    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+    Serial.println("****Baseline found and loaded but Warming Up");
+
+    VOClevels =  (String)(millis() * 100 / vocWarmup) + "% WARM";
     vocSensor.readAlgorithmResults();
     vocCO2 = vocSensor.getCO2();
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && vocTime) {
+    ESP.wdtFeed(); //********* FEEEEEDING THE DOG
+        Serial.println("****WARM UP FINISHED");
+
     if (vocSensor.dataAvailable()) {
+          Serial.println("****VOC Data Available");
+
+      ESP.wdtFeed(); //********* FEEEEEDING THE DOG
       vocSensor.readAlgorithmResults();
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
       VOClevels =  (String)vocTVOC;
+
+
+      //Added as of March 3 to make sure the VOC is warmed up properly
+      if(vocTVOC < 10){
+        ESP.restart();
+      }
+
+      
+    } else {
+      Serial.println("****NOT AVAILABLE VOC DATA");
     }
   }
 }
@@ -1041,65 +1093,96 @@ void updatePMSignature() {
   }*/
 
 void loop() {
+
+  //try first vers
+  //try yielding vers
+  //moar debugging
+  
+  
+  delay(200);
+  Serial.println("*******starting loop...");
   ESP.wdtFeed();
   pmSerial.enableRx(true);
+  ESP.wdtFeed();
   co2Serial.enableRx(false);
+  //Serial.println("**********finish enabling...");
+  ESP.wdtFeed();
   pmSerial.flush();
+  //Serial.println("**********finished flushing...");
+
+  ESP.wdtFeed();
   //pmSerial.write(PMstartup, 7);
   delay(750);
+ //Serial.println("**********ABOUT TO READ VOC...");
   readVOC();
+ // Serial.println("**********VOC HAS BEEN READ...");
+  ESP.wdtFeed();
   wdt_reset();
+    
+  
   if (pmSerial.find(0x42))
   {
+     //Serial.println("**********pmSerial Find...");
+     ESP.wdtFeed();
     ucRxBuf[0] = 0x42;
     int count = 1;
     while ( pmSerial.available() > 0 && count < 32 )
     {
+      //Serial.println("**********reading pmSerial...");
+      ESP.wdtFeed();
       ucRxBuf[count] = pmSerial.read();
       count++;
     }
+     ESP.wdtFeed();
     if (count > 31 && ucRxBuf[1] == 0x4D)
     {
+      //Serial.println("**********calculatingPM...");
+      ESP.wdtFeed();
       calculatePM();
     }
     else
       return;  //bad data, start loop again
   }
-  wdt_reset();
-
+  ESP.wdtFeed();
+  //wdt_reset();
+  //Serial.println("****Finished reading VOC and calculating");
   pmSerial.enableRx(false);
+  ESP.wdtFeed();
+  //Serial.println("****disabled pmSerial");
   co2Serial.enableRx(true);
+  ESP.wdtFeed();
+  //Serial.println("****enabled pmSerial");
   co2Serial.write(CO2startup, 7);
+  ESP.wdtFeed();
+ // Serial.println("****CO2startup co2Serial");
   delay(250);
   while (co2Serial.available() > 0)
   {
+    ESP.wdtFeed();
     readCO2(co2Serial.read());
+    //Serial.println("****Reading co2Serial");
+
   }
-  wdt_reset();
+  //wdt_reset();
+  ESP.wdtFeed();
   if (light_sensor_found)
   {
+    ESP.wdtFeed();
     readLight();
+      Serial.println("****Read Light Sensor");
   }
+  //Serial.println("****about to upload data");
   if (activeConnection) uploadData();
-  wdt_reset();
+  ESP.wdtFeed();
+  //wdt_reset();
   delay(1000);
-  wdt_reset();
+  ESP.wdtFeed();
+  //wdt_reset();
+  
   Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
 
-  //
-  if (delNum > 30) {
-    delay(2000);
-    Serial.println("Cleaning Delay *********************************");
-    delNum = 0;
-  }
-
-
-  //
-  Serial.print("Delay Loop: ");
-  Serial.println(delNum);
-  delNum++;
-
-  wdt_reset();
+  ESP.wdtFeed();
+  //wdt_reset();
 
 
   delay(del);
@@ -1108,12 +1191,10 @@ void loop() {
   //originally !
   if (t == 0 || isnan(t) )   // or any kind of error
   {
-    Serial.print( millis()); Serial.print("ERROR DHT ERROR");
-    del += 100;             // adapt delay
+    Serial.print( millis()); Serial.print("**ERROR DHT ERROR**");
+    //del += 100;             // adapt delay
     Serial.println(del);
   }
-
-
 
 
   if (!isnan(h) && !isnan(t) && t != 0 && h != 0 ) //Good data
@@ -1123,10 +1204,11 @@ void loop() {
     hIndex = dht.computeHeatIndex(t, h, false);  //calc heat index
   }
 
-
+  
   wdt_reset();
   displayInfo();
   Serial.println("Info Displayed");
   addTime();
   Serial.println("Time added");
+
 }
