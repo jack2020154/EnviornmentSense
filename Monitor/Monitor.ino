@@ -85,7 +85,7 @@ SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 //Change for each ESP upload
-const String espId = "40";
+const String espId = "1";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 const String firmwareVers = "Version 2.31";
 
@@ -128,9 +128,16 @@ String server_password = "tetrahedron";
 String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "getCO2B", "getCO2C"};
 //empty array to receive data
 String receivedData[7];
-
+//******************
+int checkInterval = 1000 * 10;
+int uploadInterval = 1000 * 60 * 3; //ms between uploads
+int serverReboot;
+static long serverReboot_lastTime = millis();
+static long serverUpload_lastTime = millis();
+//******************
 //The upload interval for the sensor. The ESP will average the data obtained over this upload Interval and upload it.
-static unsigned long uploadInterval = 1000 * 60 * 1;//ms between uploads
+//static unsigned long uploadInterval = 1000 * 60 * 1;//ms between uploads
+
 //The interval at which the sensor obtains the correction curve values.
 static unsigned long receiveDataInterval = 1000 * 60 * 60;
 //How long is needed for the VOC to warm up
@@ -297,7 +304,6 @@ void setup() {
   }
   readCurves();
 }
-
 
 
 //Calculating PM sensor values
@@ -512,9 +518,9 @@ void displayInfo() {
       display.drawString(0, 43, s);
     */
 
-    s = "**************";
-    //s += delNum;
-    //s += " ms";
+    s = "Upload: ";
+    s += (uploadInterval/1000);
+    s += " secs";
     display.drawString(0, 27, s);
 
     // For testing and debugging only, to be removed in deployment
@@ -757,12 +763,6 @@ void readVOC() {
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
       VOClevels =  (String)vocTVOC;
-
-
-      //Added as of March 3 to make sure the VOC is warmed up properly
-      if(vocTVOC < 10){
-        ESP.restart();
-      }
       
     } else {
       Serial.println("****NO AVAILABLE VOC DATA");
@@ -1079,6 +1079,68 @@ void updatePMSignature() {
 }
 
 
+void receiveUploadInterval(){
+
+    if ( ( millis() - serverUpload_lastTime ) > checkInterval ) {
+    HTTPClient getClient;
+    String getURL = "http://" + dataUrl + "/getUploadInterval.php?espId=" + espId;
+    Serial.print("Getting data from: ");
+    Serial.println(getURL);
+    getClient.begin(getURL);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      String str_upload_interval = getClient.getString();
+      Serial.print("Received Data: ");
+      Serial.println(str_upload_interval);
+      uploadInterval = str_upload_interval.toInt();
+      serverUpload_lastTime = millis();
+    } else {
+      Serial.print("Error code ");
+      Serial.println(httpCode);
+    }
+    getClient.end();
+    }
+}
+
+
+void checkServerReboot(){
+
+  if ( ( millis() - serverReboot_lastTime ) > checkInterval ) {
+  HTTPClient getClient;
+    String getURL = "http://" + dataUrl + "/getServerReboot.php?espId=" + espId;
+    Serial.print("Getting data from: ");
+    Serial.println(getURL);
+    getClient.begin(getURL);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      String str_serverReboot = getClient.getString();
+      serverReboot = str_serverReboot.toInt();
+      Serial.print("Received Data: ");
+      Serial.println(serverReboot);
+      serverReboot_lastTime = millis();
+
+      if(serverReboot == 1){
+        Serial.println("***INSTRUCTED TO REBOOT");
+        ESP.restart();
+      } else {
+        Serial.println("***Instructed not to reboot yet.");
+      }      
+      
+    } else {
+      Serial.print("Error code ");
+      Serial.println(httpCode);
+    }
+    getClient.end();
+    
+  }
+}
+
+
+
+
+
+
+
 
 void loop() {
 
@@ -1187,9 +1249,13 @@ void loop() {
     rh = h;
     hIndex = dht.computeHeatIndex(t, h, false);  //calc heat index
   }
-
   
-  wdt_reset();
+  ESP.wdtFeed();
+  receiveUploadInterval();
+  delay(1000);
+  checkServerReboot();
+  ESP.wdtFeed();
+  //wdt_reset();
   displayInfo();
   Serial.println("Info Displayed");
   addTime();
