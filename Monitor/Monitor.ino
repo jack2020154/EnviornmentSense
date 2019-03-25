@@ -75,7 +75,7 @@ SH1106 display(0x3c, 4, 5);
 //SD3/GPIO10 --> 10
 //RX/GPIO3 --> 3
  
-#define DHTPIN 2             
+#define DHTPIN 10             
 DHT dht(DHTPIN, DHTTYPE);
 
 Adafruit_TSL2591 light_sensor = Adafruit_TSL2591(2591); // pass in a number for the sensor identifier (for your use later)
@@ -84,8 +84,9 @@ CCS811Core::status errorStatus;
 SoftwareSerial pmSerial(13, 15, false, 256);    // PM RX, TX
 SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
+
 //Change for each ESP upload
-const String espId = "1";
+const String espId = "7";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
 const String firmwareVers = "Version 2.31";
 
@@ -129,8 +130,8 @@ String phpPages[7] = {"getLocation" , "getPMA", "getPMB", "getPMC", "getCO2A", "
 //empty array to receive data
 String receivedData[7];
 //******************
-int checkInterval = 1000 * 10;
-int uploadInterval = 1000 * 60 * 3; //ms between uploads
+int checkInterval = 1000 * 60 * 3;
+int uploadInterval = 1000 * 60 * 4; //ms between uploads
 int serverReboot;
 static long serverReboot_lastTime = millis();
 static long serverUpload_lastTime = millis();
@@ -367,14 +368,13 @@ void calculatePM()
   }
   else
     Serial.print("#");
-
-
-    
-    
 }
+
+
 
 void readCO2(unsigned char ucData) {
   unsigned int old_co2 = co2;
+  
   ucCO2RxBuf[ucCO2RxCnt++] = ucData;
   if (ucCO2RxBuf[0] != 0x42 && ucCO2RxBuf[1] != 0x4D) {
     ucCO2RxCnt = 0;
@@ -389,12 +389,20 @@ void readCO2(unsigned char ucData) {
     co2 = (a_co2 * co2 * co2) + (b_co2 * co2) + c_co2;
     ucCO2RxCnt = 0;
   }
-  if ( co2 < 150 && loopCnt > 1 ) {
+  
+  if ( co2 < 400 ) {
     //bad read
     Serial.print("bad CO2 read");
+
+    if(isnan(old_co2) || old_co2 == 0){
+      old_co2 = 400;
+    } 
+    
     co2 = old_co2;
+    
   }
 }
+
 
 void displayInfo() {
 //This function displays Information on the serial monitor as well as on the display
@@ -523,10 +531,6 @@ void displayInfo() {
     s += " secs";
     display.drawString(0, 27, s);
 
-    // For testing and debugging only, to be removed in deployment
-    s = "MemHeap: ";
-    s += (ESP.getFreeHeap());
-    display.drawString(0, 43, s);
 
 
     displayCount = -1;
@@ -743,7 +747,6 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && !vocTime) {
-    ESP.wdtFeed(); //Restarting Watchdog Timer
     Serial.println("****Baseline found and loaded but Warming Up");
 
     VOClevels =  (String)(millis() * 100 / vocWarmup) + "% WARM";
@@ -752,7 +755,6 @@ void readVOC() {
     vocTVOC = -1;
   }
   else if (baselineAvailable && baselineLoaded && vocTime) {
-    ESP.wdtFeed(); //Restarting Watchdog Timer
         Serial.println("****WARM UP FINISHED");
 
     if (vocSensor.dataAvailable()) {
@@ -763,6 +765,11 @@ void readVOC() {
       vocCO2 = vocSensor.getCO2();
       vocTVOC = vocSensor.getTVOC();
       VOClevels =  (String)vocTVOC;
+
+      //Added as of March 3 to make sure the VOC is warmed up properly
+      if(vocTVOC < 20){
+        ESP.restart();
+      }
       
     } else {
       Serial.println("****NO AVAILABLE VOC DATA");
@@ -792,6 +799,7 @@ void addTime() {
   }
 }
 
+
 void receiveData() {
   for (int i = 0; i <= 6; i++) {
     HTTPClient getClient;
@@ -808,6 +816,7 @@ void receiveData() {
       Serial.print("Error code ");
       Serial.println(httpCode);
       receivedData[i] = 999;
+      
     }
     getClient.end();
   }
@@ -1137,45 +1146,29 @@ void checkServerReboot(){
 
 
 
-
-
-
-
-
 void loop() {
 
-
-  
   delay(200);
-  Serial.println("*******starting loop...");
   ESP.wdtFeed();
   pmSerial.enableRx(true);
-  ESP.wdtFeed();
   co2Serial.enableRx(false);
-  //Serial.println("**********finish enabling...");
-  ESP.wdtFeed();
   pmSerial.flush();
-  //Serial.println("**********finished flushing...");
 
   ESP.wdtFeed();
   //pmSerial.write(PMstartup, 7);
+  
   delay(750);
- //Serial.println("**********ABOUT TO READ VOC...");
   readVOC();
- // Serial.println("**********VOC HAS BEEN READ...");
-  ESP.wdtFeed();
   wdt_reset();
     
   
   if (pmSerial.find(0x42))
   {
-     //Serial.println("**********pmSerial Find...");
      ESP.wdtFeed();
     ucRxBuf[0] = 0x42;
     int count = 1;
     while ( pmSerial.available() > 0 && count < 32 )
     {
-      //Serial.println("**********reading pmSerial...");
       ESP.wdtFeed();
       ucRxBuf[count] = pmSerial.read();
       count++;
@@ -1183,48 +1176,33 @@ void loop() {
      ESP.wdtFeed();
     if (count > 31 && ucRxBuf[1] == 0x4D)
     {
-      //Serial.println("**********calculatingPM...");
       ESP.wdtFeed();
       calculatePM();
     }
     else
       return;  //bad data, start loop again
   }
-  ESP.wdtFeed();
-  //wdt_reset();
-  //Serial.println("****Finished reading VOC and calculating");
+  
   pmSerial.enableRx(false);
-  ESP.wdtFeed();
-  //Serial.println("****disabled pmSerial");
   co2Serial.enableRx(true);
-  ESP.wdtFeed();
-  //Serial.println("****enabled pmSerial");
   co2Serial.write(CO2startup, 7);
-  ESP.wdtFeed();
- // Serial.println("****CO2startup co2Serial");
+
   delay(250);
   while (co2Serial.available() > 0)
   {
-    ESP.wdtFeed();
     readCO2(co2Serial.read());
-    //Serial.println("****Reading co2Serial");
 
   }
   //wdt_reset();
   ESP.wdtFeed();
   if (light_sensor_found)
   {
-    ESP.wdtFeed();
     readLight();
       Serial.println("****Read Light Sensor");
   }
-  //Serial.println("****about to upload data");
   if (activeConnection) uploadData();
-  ESP.wdtFeed();
-  //wdt_reset();
   delay(1000);
   ESP.wdtFeed();
-  //wdt_reset();
   
   Serial.printf("loop heap size: %u\n", ESP.getFreeHeap());
 
@@ -1251,11 +1229,10 @@ void loop() {
   }
   
   ESP.wdtFeed();
-  receiveUploadInterval();
+  if (activeConnection) receiveUploadInterval();
   delay(1000);
-  checkServerReboot();
-  ESP.wdtFeed();
-  //wdt_reset();
+  if (activeConnection) checkServerReboot();
+  wdt_reset();
   displayInfo();
   Serial.println("Info Displayed");
   addTime();
