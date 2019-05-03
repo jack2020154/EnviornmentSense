@@ -86,9 +86,9 @@ SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 
 //Change for each ESP upload
-const String espId = "44";
+const String espId = "23";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-const String firmwareVers = "Version 2.5";
+const String firmwareVers = "Version 2.6";
 
 //Login credentials for the ESP. This will be moved to a more efficient/effective method later.
 //const char* ssid = "TP-Link288";
@@ -182,7 +182,6 @@ static char correctedPM25[7];
 static String IP, data;
 
 static int fail_to_get_location = 0;
-static int fail_to_get_curves = 0;
 
 static long lastTime = millis();
 static long lastTime_receive = millis();
@@ -805,8 +804,51 @@ void addTime() {
 }
 
 
-void receiveData() {
-  for (int i = 0; i <= 6; i++) {
+
+void receiveData(){
+  receiveLocationData();
+  receive_PM25_Data();
+  receive_CO2_Data();
+}
+
+
+
+
+void receiveLocationData() {
+  //getting the location data seperate
+  int fail_to_get_location = 0;
+  HTTPClient getClient;
+    String getURL = "http://" + dataUrl + "/" + phpPages[0] + ".php?espId=" + espId;
+    Serial.print("Getting data from: ");
+    Serial.println(getURL);
+    getClient.begin(getURL);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      location = getClient.getString();
+      location.trim();
+      Serial.print("Received Location: ");
+      Serial.println(location);
+      fail_to_get_location = 0;
+    } else {
+      Serial.print("Error code ");
+      Serial.println(httpCode);
+      location = 999;
+      fail_to_get_location += 1;
+      if(fail_to_get_location < 3){
+        Serial.println("Failed to receive Location data *** attempt : " + fail_to_get_location);
+        receiveLocationData();
+      } else {
+        Serial.println("Failed to receive Location data...continuing.");
+      }
+    }
+    getClient.end();
+}
+
+//***** getting PM25 data *******
+void receive_PM25_Data() {
+  int fail_to_get_curves = 0;
+  
+  for (int i = 1; i <= 3; i++) {
     HTTPClient getClient;
     String getURL = "http://" + dataUrl + "/" + phpPages[i] + ".php?espId=" + espId;
     Serial.print("Getting data from: ");
@@ -822,29 +864,12 @@ void receiveData() {
       Serial.print("Error code ");
       Serial.println(httpCode);
       receivedData[i] = 999;
-
-      fail_to_get_location += 1;
-        
-        if(fail_to_get_location <= 3) {
-            Serial.println("Attempting to get location data again...");
-            //reConnect(); 
-            receiveData();
-        } else {
-            Serial.println("Three failed attempts, getting PM25 and CO2 Curves...");
-        }
-      
     }
     getClient.end();
   }
-
-  location = receivedData[0];
-  location.trim();
   a_pm25_temp = receivedData[1].toFloat();
   b_pm25_temp = receivedData[2].toFloat();
   c_pm25_temp = receivedData[3].toFloat();
-  a_co2_temp = receivedData[4].toFloat();
-  b_co2_temp = receivedData[5].toFloat();
-  c_co2_temp = receivedData[6].toFloat();
   //Ensures that invalid responses don't get written to memory
   if ((int)a_pm25_temp != 999 && (int)b_pm25_temp != 999 && (int)c_pm25_temp != 999) {
     if (a_pm25_temp != a_pm25 || b_pm25_temp != b_pm25 || c_pm25_temp != c_pm25) {
@@ -853,26 +878,53 @@ void receiveData() {
       b_pm25 = b_pm25_temp;
       c_pm25 = c_pm25_temp;
       commitPMCurves();
-    }
-    else Serial.println("No changes in curve values of PM25 detected, no action required");
+    } else {
+       Serial.println("No changes in curve values of PM25 detected, no action required");
     Serial.println("All PM2.5 values received, none invalid");
-    fail_to_get_curves = 0;
-    
+    }
   } else {
     Serial.println("One or more PM2.5 values are invalid, nullifying");
     fail_to_get_curves += 1;
         
     if(fail_to_get_curves <= 3) {
-        Serial.println("Attempting to get curves again...");
-        //reConnect();
-        receiveData(); 
+        Serial.println("Attempting to get PM25 curves again...");
+        receive_PM25_Data(); 
     } else {
-        Serial.println("Three failed attempts, starting bootup...");
-        fail_to_get_curves = 0;
+        Serial.println("Three failed attempts");
     }
-
   }
-  if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
+}
+
+
+//***** getting CO2 data *******
+void receive_CO2_Data(){
+  int fail_to_get_curves = 0;
+  
+  for (int i = 4; i <= 6; i++) {
+    HTTPClient getClient;
+    String getURL = "http://" + dataUrl + "/" + phpPages[i] + ".php?espId=" + espId;
+    Serial.print("Getting data from: ");
+    Serial.println(getURL);
+    getClient.begin(getURL);
+    int httpCode = getClient.GET();
+    if (httpCode >= 200 && httpCode < 300) {
+      receivedData[i] = getClient.getString();
+      Serial.print("Received Data: ");
+      Serial.println(receivedData[i]);
+      fail_to_get_location = 0;
+    } else {
+      Serial.print("Error code ");
+      Serial.println(httpCode);
+      receivedData[i] = 999;
+    }
+    getClient.end();
+  }
+
+  a_co2_temp = receivedData[4].toFloat();
+  b_co2_temp = receivedData[5].toFloat();
+  c_co2_temp = receivedData[6].toFloat();
+  //Ensures that invalid responses don't get written to memory
+ if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
     if (a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
       Serial.println("Difference in server and current curves of CO2 detected, updating");
       a_co2 = a_co2_temp;
@@ -882,21 +934,115 @@ void receiveData() {
     }
     else Serial.println("No changes in curve values of CO2 detected, no action required");
     Serial.println("All CO2 values received, none invalid");
-    fail_to_get_curves = 0;
   } else  {
     Serial.println("One or more CO2 values are invalid, nullifying");
     fail_to_get_curves += 1;
-    
     if(fail_to_get_curves <= 3) {
         Serial.println("Attempting to get curves again...");
-        //reConnect();
-        receiveData(); 
+        receive_CO2_Data(); 
     } else {
         Serial.println("Three failed attempts, starting bootup...");
-        fail_to_get_curves = 0;
     }
   }
 }
+
+
+
+
+
+// ****** Old receive data()
+//void receiveData() {
+//  for (int i = 0; i <= 6; i++) {
+//    HTTPClient getClient;
+//    String getURL = "http://" + dataUrl + "/" + phpPages[i] + ".php?espId=" + espId;
+//    Serial.print("Getting data from: ");
+//    Serial.println(getURL);
+//    getClient.begin(getURL);
+//    int httpCode = getClient.GET();
+//    if (httpCode >= 200 && httpCode < 300) {
+//      receivedData[i] = getClient.getString();
+//      Serial.print("Received Data: ");
+//      Serial.println(receivedData[i]);
+//      fail_to_get_location = 0;
+//    } else {
+//      Serial.print("Error code ");
+//      Serial.println(httpCode);
+//      receivedData[i] = 999;
+//
+//      fail_to_get_location += 1;
+//        
+//        if(fail_to_get_location <= 3) {
+//            Serial.println("Attempting to get location data again...");
+//            //reConnect(); 
+//            receiveData();
+//        } else {
+//            Serial.println("Three failed attempts, getting PM25 and CO2 Curves...");
+//        }
+//      
+//    }
+//    getClient.end();
+//  }
+//
+//  location = receivedData[0];
+//  location.trim();
+//  a_pm25_temp = receivedData[1].toFloat();
+//  b_pm25_temp = receivedData[2].toFloat();
+//  c_pm25_temp = receivedData[3].toFloat();
+//  a_co2_temp = receivedData[4].toFloat();
+//  b_co2_temp = receivedData[5].toFloat();
+//  c_co2_temp = receivedData[6].toFloat();
+//  //Ensures that invalid responses don't get written to memory
+//  if ((int)a_pm25_temp != 999 && (int)b_pm25_temp != 999 && (int)c_pm25_temp != 999) {
+//    if (a_pm25_temp != a_pm25 || b_pm25_temp != b_pm25 || c_pm25_temp != c_pm25) {
+//      Serial.println("Difference in server and current curves of PM25 detected, updating");
+//      a_pm25 = a_pm25_temp;
+//      b_pm25 = b_pm25_temp;
+//      c_pm25 = c_pm25_temp;
+//      commitPMCurves();
+//    }
+//    else Serial.println("No changes in curve values of PM25 detected, no action required");
+//    Serial.println("All PM2.5 values received, none invalid");
+//    fail_to_get_curves = 0;
+//    
+//  } else {
+//    Serial.println("One or more PM2.5 values are invalid, nullifying");
+//    fail_to_get_curves += 1;
+//        
+//    if(fail_to_get_curves <= 3) {
+//        Serial.println("Attempting to get curves again...");
+//        //reConnect();
+//        receiveData(); 
+//    } else {
+//        Serial.println("Three failed attempts, starting bootup...");
+//        fail_to_get_curves = 0;
+//    }
+//
+//  }
+//  if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
+//    if (a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
+//      Serial.println("Difference in server and current curves of CO2 detected, updating");
+//      a_co2 = a_co2_temp;
+//      b_co2 = b_co2_temp;
+//      c_co2 = c_co2_temp;
+//      commitCo2Curves();
+//    }
+//    else Serial.println("No changes in curve values of CO2 detected, no action required");
+//    Serial.println("All CO2 values received, none invalid");
+//    fail_to_get_curves = 0;
+//  } else  {
+//    Serial.println("One or more CO2 values are invalid, nullifying");
+//    fail_to_get_curves += 1;
+//    
+//    if(fail_to_get_curves <= 3) {
+//        Serial.println("Attempting to get curves again...");
+//        //reConnect();
+//        receiveData(); 
+//    } else {
+//        Serial.println("Three failed attempts, starting bootup...");
+//        fail_to_get_curves = 0;
+//    }
+//  }
+//}
 
 void commitPMCurves() {
   int a_pm25_sig = 2, b_pm25_sig = 2, c_pm25_sig = 2;
