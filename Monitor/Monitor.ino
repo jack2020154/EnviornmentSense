@@ -86,9 +86,15 @@ SoftwareSerial co2Serial(14, 12, false, 256);   // CO2 RX, TX
 
 
 //Change for each ESP upload
-const String espId = "7";
+const String espId = "44";
 const String dataUrl = "sms.concordiashanghai.org/bdst"; //Just the IP address ex. 172.18.80.11 //older one:  sms.concordiashanghai.org/bdst
-const String firmwareVers = "Version 2.31";
+const String firmwareVers = "Version 2.5";
+
+//Login credentials for the ESP. This will be moved to a more efficient/effective method later.
+//const char* ssid = "TP-Link288";
+//const char* password = "50308888HO";
+const char* ssid = "CISS_Employees_Students";
+const char* password = "";
 
 
 
@@ -114,10 +120,6 @@ int vocCO2 = -1;
 int vocTVOC = -1;
 String macAddr;
 
-//Login credentials for the ESP. This will be moved to a more efficient/effective method later.
-const char* ssid = "TP-Link288";
-const char* password = "50308888HO";
-//CISS_Employees_Students
 
 //The location that the sensor represents. Ex: H529
 String location;
@@ -178,6 +180,9 @@ static char temperature[7];
 static char humidity[7];
 static char correctedPM25[7];
 static String IP, data;
+
+static int fail_to_get_location = 0;
+static int fail_to_get_curves = 0;
 
 static long lastTime = millis();
 static long lastTime_receive = millis();
@@ -812,10 +817,21 @@ void receiveData() {
       receivedData[i] = getClient.getString();
       Serial.print("Received Data: ");
       Serial.println(receivedData[i]);
+      fail_to_get_location = 0;
     } else {
       Serial.print("Error code ");
       Serial.println(httpCode);
       receivedData[i] = 999;
+
+      fail_to_get_location += 1;
+        
+        if(fail_to_get_location <= 3) {
+            Serial.println("Attempting to get location data again...");
+            //reConnect(); 
+            receiveData();
+        } else {
+            Serial.println("Three failed attempts, getting PM25 and CO2 Curves...");
+        }
       
     }
     getClient.end();
@@ -840,9 +856,21 @@ void receiveData() {
     }
     else Serial.println("No changes in curve values of PM25 detected, no action required");
     Serial.println("All PM2.5 values received, none invalid");
+    fail_to_get_curves = 0;
+    
   } else {
     Serial.println("One or more PM2.5 values are invalid, nullifying");
-    reConnect();
+    fail_to_get_curves += 1;
+        
+    if(fail_to_get_curves <= 3) {
+        Serial.println("Attempting to get curves again...");
+        //reConnect();
+        receiveData(); 
+    } else {
+        Serial.println("Three failed attempts, starting bootup...");
+        fail_to_get_curves = 0;
+    }
+
   }
   if ((int)a_co2_temp != 999 && (int)b_co2_temp != 999 && (int)c_co2_temp != 999) {
     if (a_co2_temp != a_co2 || b_co2_temp != b_co2 || c_co2_temp != c_co2) {
@@ -854,11 +882,20 @@ void receiveData() {
     }
     else Serial.println("No changes in curve values of CO2 detected, no action required");
     Serial.println("All CO2 values received, none invalid");
+    fail_to_get_curves = 0;
   } else  {
     Serial.println("One or more CO2 values are invalid, nullifying");
-    reConnect();
+    fail_to_get_curves += 1;
+    
+    if(fail_to_get_curves <= 3) {
+        Serial.println("Attempting to get curves again...");
+        //reConnect();
+        receiveData(); 
+    } else {
+        Serial.println("Three failed attempts, starting bootup...");
+        fail_to_get_curves = 0;
+    }
   }
-
 }
 
 void commitPMCurves() {
