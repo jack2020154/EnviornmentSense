@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Concordia AQI</title>
+    <style>
+    body {
+      font-family: Helvetica;
+      margin: 0px;
+    }
+    .choice {
+        padding: 8px;
+        font-size: 20px;
+        background-color: #84a8ce;
+        border-radius: 5px;
+        margin: 5px;
+        width: 150px;
+        border: none;
+    }
+    .choice:hover {
+        box-shadow: 2px 2px 5px grey
+    }
+    .center {
+        display: inline-block;
+    }
+    .controlBanner {
+        background-color: #eee;
+        text-align: center;
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+    #chartContainer {
+        height: 300px;
+        width: 100%;
+    }
+    #outerBox {
+        margin: 15px;
+    }
+    </style>
+</head>
+<body>
+    <script src="jonathan/canvasjs.min.js"></script>
+    <script>
+        var dataList = []
+        var chart = null
+
+        window.onload = function () {
+
+            chart = new CanvasJS.Chart("chartContainer", {
+                animationEnabled: true,
+                axisX:{
+                    valueFormatString: "MMM DD, HH:mm",
+                },
+                axisY: {
+                    title: "AQI",
+                    includeZero: false,
+                    valueFormatString: "###",
+                },
+                data: [{
+                    type: "area",
+                    xValueFormatString: "MMM DD, HH:mm ",
+                    yValueFormatString: "###",
+                    dataPoints: dataList //[
+                        //{ x: new Date(2016, 7, 2, 1, 15, 55), y: 76.727997 },
+                        //{ x: new Date(2016, 7, 2, 16, 30, 30), y: 75.459999 }
+                    //]
+                }]
+            });
+            chart.render();
+
+            lastHours(24);
+
+        }
+
+        function lastHours(hours) {
+            // gets and plots the data from right now to x hours in the past,
+            // specified by the variable hours
+
+            var rightNow = new Date();
+            today = parseInt(rightNow.getTime() / 1000);
+            yesterday = parseInt(rightNow.getTime() / 1000 - 60*60*hours);
+            getData(yesterday, today);
+        }
+
+        function getData(start_date, end_date, resolution) {
+            // start_date and end_date must be in the format of:
+            //      '2019-05-08 19:33:41'
+
+            xmlhttp = new XMLHttpRequest()
+            xmlhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    var txt = this.responseText
+                    txt = txt.split('\n')
+                    for (;dataList.length > 0;) {
+                        dataList.pop()
+                    }
+                    console.log(txt.length)
+                    console.log(this.responseText)
+                    for (var i in txt) {
+                        if (txt[i].trim() == '') {
+                            continue
+                        }
+                        // i is in the format: "2018-04-22 23:00:00 102"
+                        var tmp = txt[i].trim().split(' ')
+                        var date = tmp[0].split('-')
+                        var time = tmp[1].split(':')
+                        var aqi = parseInt(tmp[2])
+                        dataList.push({
+                            x: new Date(
+                                parseInt(date[0]), 
+                                parseInt(date[1])-1, 
+                                // months apparently start at zero in canvasJS 
+                                // Jan - 0, Feb - 1, Mar - 2, etc.
+                                parseInt(date[2]), 
+                                parseInt(time[0]), 
+                                parseInt(time[1]), 
+                                parseInt(time[2])),
+                            y: aqi
+                        });
+                        chart.render();
+                    }
+                }
+                else {
+                    if (this.readyState == 4) {
+                        console.error('Problem fetching date: Status ' + this.status)
+                    }
+                }
+            }
+            xmlhttp.open('POST', 'jonathan/data2.php', true)
+            xmlhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded')
+
+            if (!start_date) {
+                return; //start_date = document.getElementById('start_date').value
+            }
+            if (!end_date) {
+                return; //end_date = document.getElementById('end_date').value
+            }
+            if (!resolution) {
+                resolution = 40
+            }
+            var str = 'start_date=' + start_date + '&end_date=' + end_date + '&resolution=' + resolution + '\n'
+            xmlhttp.send(str);
+}
+    </script>
+    <h1 style="text-align: center;">Concordia AQI</h1>
+    <div id="outerBox">
+        <div id="chartContainer"></div>
+    </div>
+
+    <div class="controlBanner">
+        <div class="center">
+            <button class="choice" onclick="lastHours(24)">Last 24h</button>
+            <button class="choice" onclick="lastHours(168)">Last Week</button>
+            <button class="choice" onclick="lastHours(720)">Last 30 Days</button>
+            <button class="choice" onclick="lastHours(4368)">Last 6 Months</button>
+            <button class="choice" onclick="lastHours(8760)">Last Year</button>
+        </div>
+    </div>
+    <div style="border: 2px solid black;" hidden>
+        <p>Start date</p>
+        <input type="text" id="start_date">
+        <p>End date</p>
+        <input type="text" id="end_date">
+        <button onclick="getData()">Submit</button>
+    </div>
+</body>
+</html>
